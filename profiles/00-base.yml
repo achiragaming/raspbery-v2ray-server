@@ -1,0 +1,49 @@
+# =============================================================================
+# clash/profiles/00-base.yml
+# Global settings — loaded first
+# Nodes go in 01-*.yml files
+# =============================================================================
+
+mixed-port: 7890
+socks-port: 7891
+allow-lan: true
+bind-address: "*"
+mode: rule
+log-level: info
+ipv6: false
+find-process-mode: strict
+tcp-concurrent: true
+
+profile:
+  store-selected: true
+  store-fake-ip: true
+
+geodata-mode: true
+geo-update-interval: 24
+
+# Proxy groups — nodes are auto-populated by build.js
+proxy-groups:
+  - name: "🚀 Proxy"
+    type: select
+    proxies:
+      - DIRECT
+
+  - name: "🔀 Auto"
+    type: url-test
+    proxies:
+      - DIRECT
+    url: "http://www.gstatic.com/generate_204"
+    interval: 300
+    tolerance: 50
+
+  - name: "🛡️ Fallback"
+    type: fallback
+    proxies:
+      - DIRECT
+    url: "http://www.gstatic.com/generate_204"
+    interval: 300
+
+# Base rules — VPN bypass + LAN rules injected above by build.js
+rules:
+  - GEOIP,CN,DIRECT,no-resolve
+  - MATCH,🚀 Proxy

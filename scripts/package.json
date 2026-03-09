@@ -1,0 +1,9 @@
+{
+  "name": "clash-config-builder",
+  "version": "1.0.0",
+  "description": "Clash Meta config preprocessor",
+  "main": "build.js",
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}

@@ -1,0 +1,56 @@
+---
+# =============================================================================
+# docker-compose.pihole.yml
+# Pi-hole on pihole_net → macvlan-pihole → enp2s0
+# Secrets loaded from .env file
+# =============================================================================
+name: pihole
+
+networks:
+  pihole_net:
+    external: true
+    name: pihole_net
+
+services:
+  pihole:
+    image: pihole/pihole:latest
+    container_name: pihole
+    hostname: pihole
+    restart: unless-stopped
+
+    networks:
+      pihole_net:
+        ipv4_address: ${PIHOLE_IP}
+
+    env_file:
+      - .env
+
+    environment:
+      TZ: "Asia/Singapore"
+      FTLCONF_webserver_api_password: ${PIHOLE_PASSWORD}
+      PIHOLE_DNS_: "8.8.8.8;8.8.4.4"
+      DNSSEC: "false"
+      DNS_BOGUS_PRIV: "true"
+      DNS_FQDN_REQUIRED: "true"
+      DNSMASQ_LISTENING: "all"
+      IPv6: "false"
+      VIRTUAL_HOST: "pi.hole"
+      PIHOLE_DOMAIN: "lan"
+
+    volumes:
+      - pihole_data:/etc/pihole
+      - pihole_dnsmasq:/etc/dnsmasq.d
+      - /etc/localtime:/etc/localtime:ro
+
+    cap_add:
+      - NET_ADMIN
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETFCAP
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+
+volumes:
+  pihole_data:
+  pihole_dnsmasq:

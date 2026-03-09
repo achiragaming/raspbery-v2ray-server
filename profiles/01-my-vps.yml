@@ -1,0 +1,27 @@
+# =============================================================================
+# clash/profiles/01-my-vps.yml
+# Your nodes — build.js picks these up automatically
+# Add more files: 02-work.yml, 03-airport.yml, etc.
+# =============================================================================
+
+proxies:
+  - name: "My-VPS-SG"
+    type: vless
+    server: xxx.xxx.xxx.xxx
+    port: 443
+    uuid: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    tls: true
+    udp: true
+    network: tcp
+    servername: aka.ms
+    skip-cert-verify: true
+
+  # - name: "My-VPS-US"
+  #   type: vless
+  #   server: 1.2.3.4
+  #   port: 443
+  #   uuid: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  #   tls: true
+  #   network: tcp
+  #   servername: aka.ms
+  #   skip-cert-verify: true

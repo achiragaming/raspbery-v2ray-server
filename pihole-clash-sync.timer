@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodic Pi-hole → Clash DNS sync (every 60s)
+Requires=pihole-clash-sync.service
+
+[Timer]
+OnBootSec=30sec
+OnUnitActiveSec=60sec
+AccuracySec=5sec
+Persistent=true
+
+[Install]
+WantedBy=timers.target

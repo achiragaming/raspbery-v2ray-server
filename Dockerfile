@@ -11,7 +11,7 @@ FROM node:20-alpine
 COPY --from=mihomo /mihomo /usr/local/bin/mihomo
 
 # Install system deps
-RUN apk add --no-cache iproute2
+RUN apk add --no-cache iproute2 iptables
 
 # Pre-install js-yaml
 WORKDIR /scripts

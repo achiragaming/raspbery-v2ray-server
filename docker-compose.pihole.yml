@@ -28,7 +28,7 @@ services:
     environment:
       TZ: "Asia/Singapore"
       FTLCONF_webserver_api_password: ${PIHOLE_PASSWORD}
-      PIHOLE_DNS_: "8.8.8.8;8.8.4.4"
+      FTLCONF_dns_upstreams: "${CLASH_IP}"
       DNSSEC: "false"
       DNS_BOGUS_PRIV: "true"
       DNS_FQDN_REQUIRED: "true"

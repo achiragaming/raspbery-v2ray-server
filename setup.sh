@@ -125,7 +125,6 @@ else
   docker network create \
     --driver macvlan \
     --subnet "$LAN_SUBNET" \
-
     --gateway "$LAN_GATEWAY" \
     --ip-range "$PIHOLE_RANGE" \
     --opt parent=macvlan-pihole \

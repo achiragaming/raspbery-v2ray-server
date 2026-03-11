@@ -142,6 +142,7 @@ function main(config) {
       "https://1.1.1.1/dns-query", // Cloudflare DoH
       "https://8.8.8.8/dns-query", // Google DoH
     ],
+    'proxy-server-nameserver': [LAN_DNS],
     "default-nameserver": [LAN_DNS],
       'nameserver-policy': {
     '*.lan':      PIHOLE_IP,
@@ -218,7 +219,7 @@ function main(config) {
   config.rules = [
     ...vpnBypassRules,
     `IP-CIDR,${LAN_CIDR},DIRECT,no-resolve`,
-    "GEOIP,lan,DIRECT,no-resolve",
+
     ...existingRules,
     matchRule,
   ];

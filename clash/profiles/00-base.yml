@@ -20,8 +20,8 @@ profile:
   store-selected: true
   store-fake-ip: true
 
-geodata-mode: true
-geo-update-interval: 24
+# Disabled geodata-mode since GEOIP rules were removed
+geodata-mode: false
 
 # Proxy groups — nodes are auto-populated by build.js
 proxy-groups:
@@ -45,7 +45,6 @@ proxy-groups:
     url: "http://www.gstatic.com/generate_204"
     interval: 300
 
-# Base rules — VPN bypass + LAN rules injected above by build.js
+# Base rules — All traffic now flows through the Proxy group by default
 rules:
-  - GEOIP,CN,DIRECT,no-resolve
   - MATCH,🚀 Proxy

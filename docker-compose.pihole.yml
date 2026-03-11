@@ -26,16 +26,22 @@ services:
       - .env
 
     environment:
-      TZ: "Asia/Singapore"
+      TZ: ${TZ}
       FTLCONF_webserver_api_password: ${PIHOLE_PASSWORD}
-      FTLCONF_dns_upstreams: "${CLASH_IP}"
-      DNSSEC: "false"
-      DNS_BOGUS_PRIV: "true"
-      DNS_FQDN_REQUIRED: "true"
-      DNSMASQ_LISTENING: "all"
-      IPv6: "false"
-      VIRTUAL_HOST: "pi.hole"
-      PIHOLE_DOMAIN: "lan"
+      FTLCONF_dns_upstreams: ${CLASH_IP}
+      FTLCONF_dns_dnssec: "false"
+      FTLCONF_dns_bogusPriv: "true"
+      FTLCONF_dns_fqdnRequired: "true"
+      FTLCONF_dns_listeningMode: "all"
+      FTLCONF_dns_revServers: "false"
+      FTLCONF_misc_etc_hosts: "false"
+
+      FTLCONF_dhcp_active: "true"
+      FTLCONF_dhcp_start: ${DHCP_START}
+      FTLCONF_dhcp_end: ${DHCP_END}
+      FTLCONF_dhcp_router: ${CLASH_IP}
+      FTLCONF_dhcp_leaseTime: ${DHCP_LEASE_TIME:-24h}
+      FTLCONF_dhcp_domain: ${DHCP_DOMAIN:-lan}
 
     volumes:
       - pihole_data:/etc/pihole

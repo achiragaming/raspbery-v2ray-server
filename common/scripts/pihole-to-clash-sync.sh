@@ -47,13 +47,8 @@ DNS_HOSTS=$(curl -sk --max-time 10 \
   -X GET "https://${PIHOLE_IP}/api/config/dns/hosts?detailed=true" \
   -H "X-FTL-SID: ${SID}")
 
-CUSTOM_DNS=$(curl -sk --max-time 10 \
-  -X GET "https://${PIHOLE_IP}/api/customdns" \
-  -H "X-FTL-SID: ${SID}")
-
 [ "$DEBUG" = true ] && {
-  echo "$DNS_HOSTS"  > /tmp/pihole_dns_debug.json
-  echo "$CUSTOM_DNS" > /tmp/pihole_customdns_debug.json
+  echo "$DNS_HOSTS" > /tmp/pihole_dns_debug.json
 }
 
 # =============================================================================
@@ -66,43 +61,35 @@ curl -sk -X DELETE "https://${PIHOLE_IP}/api/auth" \
 # Step 4: Process with Python — write results to temp files
 # =============================================================================
 export PIHOLE_DNS_HOSTS="$DNS_HOSTS"
-export PIHOLE_CUSTOM_DNS="$CUSTOM_DNS"
 export PIHOLE_IP CLASH_API CLASH_SECRET
 
 python3 << 'PYEOF'
 import json, os, urllib.request
 
-dns_raw    = os.environ['PIHOLE_DNS_HOSTS']
-custom_raw = os.environ['PIHOLE_CUSTOM_DNS']
-clash_url  = os.environ.get('CLASH_API',    'http://192.168.8.146:9090')
-clash_key  = os.environ.get('CLASH_SECRET', 'changeme')
-pihole_ip  = os.environ.get('PIHOLE_IP',    '192.168.8.145')
+dns_raw   = os.environ['PIHOLE_DNS_HOSTS']
+clash_url = os.environ.get('CLASH_API',    'http://192.168.8.146:9090')
+clash_key = os.environ.get('CLASH_SECRET', 'changeme')
+pihole_ip = os.environ.get('PIHOLE_IP',    '192.168.8.145')
 
 # --- Parse hosts ---
 try:
     data = json.loads(dns_raw)
     raw_records = data.get('config', {}).get('dns', {}).get('hosts', {}).get('value', [])
     pihole_hosts = {}
+    all_domains = []
     for entry in raw_records:
         parts = entry.split()
         if len(parts) >= 2:
             ip = parts[0]
             for domain in parts[1:]:
                 pihole_hosts[domain] = ip
+                all_domains.append(domain)
 except Exception as e:
     print(f'PARSE_ERROR: {e}', flush=True)
     raise SystemExit(1)
 
-# --- Parse custom DNS domains for nameserver-policy ---
+# --- Build nameserver-policy patterns from dns/hosts domains ---
 try:
-    cdata   = json.loads(custom_raw)
-    records = cdata.get('customdns', [])
-    all_domains = [r['domain'] for r in records if 'domain' in r]
-    for entry in raw_records:
-        parts = entry.split()
-        if len(parts) >= 2:
-            all_domains.extend(parts[1:])
-
     known_local = {'lan','local','internal','home','intranet','corp','private','vpn','lab'}
     patterns = {'*.lan','*.local','*.internal','*.home','pi.hole'}
     for domain in all_domains:

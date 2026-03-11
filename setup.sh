@@ -6,16 +6,27 @@
 # =============================================================================
 set -euo pipefail
 
-HOST_IFACE="${HOST_IFACE:-enp2s0}"   # your physical NIC
-LAN_SUBNET="192.168.8.0/24"
-LAN_GATEWAY="192.168.8.1"
-PIHOLE_IP="192.168.8.145"
-CLASH_IP="192.168.8.146"
 STACK_DIR="/opt/clash-stack"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Non-overlapping IP ranges within the subnet for Docker's pool manager
-PIHOLE_RANGE="192.168.8.144/28"
-CLASH_RANGE="192.168.8.160/28"
+# Load variables from .env
+if [[ -f "$SCRIPT_DIR/.env" ]]; then
+  set -o allexport
+  source "$SCRIPT_DIR/.env"
+  set +o allexport
+else
+  echo "ERROR: .env file not found in $SCRIPT_DIR"
+  exit 1
+fi
+
+# Defaults in case .env is missing any
+HOST_IFACE="${HOST_IFACE:-enp2s0}"
+LAN_SUBNET="${LAN_SUBNET:-192.168.8.0/24}"
+LAN_GATEWAY="${LAN_GATEWAY:-192.168.8.1}"
+PIHOLE_IP="${PIHOLE_IP:-192.168.8.145}"
+CLASH_IP="${CLASH_IP:-192.168.8.146}"
+PIHOLE_RANGE="${PIHOLE_RANGE:-192.168.8.144/28}"
+CLASH_RANGE="${CLASH_RANGE:-192.168.8.160/28}"
 
 log()  { echo "  ✔ $*"; }
 warn() { echo "  ⚠ $*"; }
@@ -156,11 +167,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cp "$SCRIPT_DIR/docker-compose.pihole.yml" "$STACK_DIR/"
 cp "$SCRIPT_DIR/docker-compose.clash.yml"  "$STACK_DIR/"
 cp "$SCRIPT_DIR/Dockerfile"       "$STACK_DIR/"
-cp "$SCRIPT_DIR/entrypoint.sh"       "$STACK_DIR/clash/scripts/"
-cp "$SCRIPT_DIR/scripts/build.js"       "$STACK_DIR/clash/scripts/"
-cp "$SCRIPT_DIR/scripts/package.json"   "$STACK_DIR/clash/scripts/"
+cp "$SCRIPT_DIR/clash/scripts/entrypoint.sh"       "$STACK_DIR/clash/scripts/"
+cp "$SCRIPT_DIR/clash/scripts/build.js"       "$STACK_DIR/clash/scripts/"
+cp "$SCRIPT_DIR/clash/scripts/package.json"   "$STACK_DIR/clash/scripts/"
 
-for f in "$SCRIPT_DIR/profiles/"*.yml; do
+for f in "$SCRIPT_DIR/clash/profiles/"*.yml; do
   dest="$STACK_DIR/clash/profiles/$(basename "$f")"
   [[ ! -f "$dest" ]] && cp "$f" "$dest" && log "Copied profile: $(basename "$f")"
 done
@@ -171,12 +182,12 @@ done
 # 5. Sync script + systemd timer
 # =============================================================================
 
-cp "$SCRIPT_DIR/pihole-to-clash-sync.sh" /usr/local/bin/
+cp "$SCRIPT_DIR/common/scripts/pihole-to-clash-sync.sh" /usr/local/bin/
 chmod +x /usr/local/bin/pihole-to-clash-sync.sh
 log "Installed sync script"
 
-cp "$SCRIPT_DIR/pihole-clash-sync.service" /etc/systemd/system/
-cp "$SCRIPT_DIR/pihole-clash-sync.timer"   /etc/systemd/system/
+cp "$SCRIPT_DIR/common/scripts/pihole-clash-sync.service" /etc/systemd/system/
+cp "$SCRIPT_DIR/common/scripts/pihole-clash-sync.timer"   /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now pihole-clash-sync.timer
 log "Systemd timer enabled (every 60s)"
@@ -197,14 +208,12 @@ echo "    ${HOST_IFACE} (physical, host IP: $(ip -4 addr show ${HOST_IFACE} | gr
 echo "    ├── macvlan-pihole → pihole_net → ${PIHOLE_IP} (Pi-hole)"
 echo "    └── macvlan-clash  → clash_net  → ${CLASH_IP}  (Clash)"
 echo ""
-echo "  ⚠  Host cannot reach containers directly (macvlan isolation)"
-echo "     Access dashboards from another LAN device (phone, other PC)"
 echo "     Pi-hole: https://${PIHOLE_IP}"
 echo "     Clash:   http://${CLASH_IP}:9090"
 echo ""
 echo "  Next steps:"
 echo "  1. Edit $STACK_DIR/.env"
-echo "       → set CLASH_SECRET and PIHOLE_TOKEN"
+echo "       → set CLASH_SECRET and PIHOLE_PASSWORD"
 echo "  2. Edit $STACK_DIR/clash/config/config.yaml"
 echo "       → set secret: to match CLASH_SECRET"
 echo "  3. docker compose -f $STACK_DIR/docker-compose.pihole.yml up -d"

@@ -6,7 +6,7 @@
 # =============================================================================
 set -euo pipefail
 
-STACK_DIR="/opt/clash-stack"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Load variables from .env
@@ -20,6 +20,7 @@ else
 fi
 
 # Defaults in case .env is missing any
+STACK_DIR="${STACK_DIR:-"/opt/clash-stack"}" 
 HOST_IFACE="${HOST_IFACE:-enp2s0}"
 LAN_SUBNET="${LAN_SUBNET:-192.168.8.0/24}"
 LAN_GATEWAY="${LAN_GATEWAY:-192.168.8.1}"
@@ -182,12 +183,44 @@ done
 # 5. Sync script + systemd timer
 # =============================================================================
 
+# 5. Sync script + systemd timer
 cp "$SCRIPT_DIR/common/scripts/pihole-to-clash-sync.sh" /usr/local/bin/
 chmod +x /usr/local/bin/pihole-to-clash-sync.sh
 log "Installed sync script"
 
-cp "$SCRIPT_DIR/common/scripts/pihole-clash-sync.service" /etc/systemd/system/
-cp "$SCRIPT_DIR/common/scripts/pihole-clash-sync.timer"   /etc/systemd/system/
+# Write service file dynamically so EnvironmentFile path matches STACK_DIR
+cat > /etc/systemd/system/pihole-clash-sync.service << SVCEOF
+[Unit]
+Description=Sync Pi-hole local DNS records into Clash hosts
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/pihole-to-clash-sync.sh
+EnvironmentFile=${STACK_DIR}/.env
+StandardOutput=journal
+StandardError=journal
+User=root
+PrivateTmp=true
+NoNewPrivileges=true
+SVCEOF
+
+cat > /etc/systemd/system/pihole-clash-sync.timer << SVCEOF
+[Unit]
+Description=Periodic Pi-hole → Clash DNS sync (every 60s)
+Requires=pihole-clash-sync.service
+
+[Timer]
+OnBootSec=30sec
+OnUnitActiveSec=60sec
+AccuracySec=5sec
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+SVCEOF
+
 systemctl daemon-reload
 systemctl enable --now pihole-clash-sync.timer
 log "Systemd timer enabled (every 60s)"

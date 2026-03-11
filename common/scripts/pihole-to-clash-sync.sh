@@ -4,13 +4,15 @@
 # Syncs Pi-hole v6 local DNS hosts + auto-updates nameserver-policy in build.js
 # =============================================================================
 set -euo pipefail
-STACK_DIR="${STACK_DIR:-"/opt/clash-stack"}" 
+
 PIHOLE_IP="${PIHOLE_IP:-192.168.8.145}"
 PIHOLE_PASSWORD="${PIHOLE_PASSWORD:-}"
 CLASH_API="${CLASH_API:-http://192.168.8.146:9090}"
 CLASH_SECRET="${CLASH_SECRET:-changeme}"
+STACK_DIR="${STACK_DIR:-/opt/clash-stack}"
 BUILD_JS="${STACK_DIR}/clash/scripts/build.js"
-POLICY_HASH_FILE="/tmp/clash-policy.hash"
+POLICY_HASH_FILE="/var/lib/clash-sync/policy.hash"
+mkdir -p /var/lib/clash-sync
 DEBUG=false
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }

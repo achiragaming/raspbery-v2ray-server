@@ -119,11 +119,15 @@ sysctl -p >/dev/null
 log "IP forwarding disabled"
 
 # =============================================================================
-# 9. Remove stack directory
+# 9. Remove stack directory + clash-sync state
 # =============================================================================
 
 if [[ -d "$STACK_DIR" ]]; then
   rm -rf "$STACK_DIR" && log "Removed: $STACK_DIR" || warn "Could not remove: $STACK_DIR"
+fi
+
+if [[ -d "/var/lib/clash-sync" ]]; then
+  rm -rf /var/lib/clash-sync && log "Removed: /var/lib/clash-sync" || warn "Could not remove: /var/lib/clash-sync"
 fi
 
 echo ""

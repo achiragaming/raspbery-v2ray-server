@@ -1,4 +1,9 @@
 ---
+# =============================================================================
+# docker-compose.clash.yml
+# Clash Meta (mihomo) on clash_net → macvlan-clash → HOST_IFACE
+# Gateway is set by entrypoint.sh — NOT by Docker (macvlan limitation)
+# =============================================================================
 name: clash
 
 networks:
@@ -9,7 +14,7 @@ networks:
 services:
   clash:
     build:
-      context: .
+      context: ./clash
       dockerfile: Dockerfile
     image: clash-mihomo:latest
     container_name: clash
@@ -28,9 +33,9 @@ services:
     cap_drop:
       - ALL
     cap_add:
-      - NET_ADMIN
-      - NET_BIND_SERVICE
-      - SYS_PTRACE
+      - NET_ADMIN        # ip route, iptables, TUN
+      - NET_BIND_SERVICE # bind ports < 1024
+      - SYS_PTRACE       # mihomo process inspection
 
     sysctls:
       - net.ipv4.ip_forward=1
@@ -38,6 +43,8 @@ services:
 
     environment:
       GATEWAY_IP: ${LAN_GATEWAY}
+      PIHOLE_IP:  ${PIHOLE_IP}
+      CLASH_IP:   ${CLASH_IP}
 
     env_file:
       - .env

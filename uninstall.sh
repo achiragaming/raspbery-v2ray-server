@@ -17,8 +17,6 @@ elif [[ -f "/opt/clash-stack/.env" ]]; then
   set +o allexport
 fi
 
-LAN_SUBNET="${LAN_SUBNET:-192.168.8.0/24}"
-LAN_GATEWAY="${LAN_GATEWAY:-192.168.8.1}"
 PIHOLE_IP="${PIHOLE_IP:-192.168.8.145}"
 CLASH_IP="${CLASH_IP:-192.168.8.146}"
 STACK_DIR="${STACK_DIR:-/opt/clash-stack}"
@@ -36,9 +34,14 @@ echo ""
 # 1. Stop and remove containers
 # =============================================================================
 
-for compose in "$STACK_DIR/docker-compose.pihole.yml" "$STACK_DIR/docker-compose.clash.yml"; do
+for compose in \
+  "$STACK_DIR/docker-compose.sync.yml" \
+  "$STACK_DIR/docker-compose.pihole.yml" \
+  "$STACK_DIR/docker-compose.clash.yml"; do
   if [[ -f "$compose" ]]; then
-    docker compose -f "$compose" down 2>/dev/null && log "Stopped: $(basename $compose)" || warn "Could not stop: $(basename $compose)"
+    docker compose -f "$compose" down 2>/dev/null \
+      && log "Stopped: $(basename "$compose")" \
+      || warn "Could not stop: $(basename "$compose")"
   fi
 done
 
@@ -46,7 +49,7 @@ done
 # 2. Remove Docker networks
 # =============================================================================
 
-for net in pihole_net clash_net apps_net; do
+for net in pihole_net clash_net; do
   if docker network ls --format '{{.Name}}' | grep -q "^${net}$"; then
     docker network rm "$net" && log "Removed network: $net" || warn "Could not remove: $net"
   else
@@ -55,18 +58,20 @@ for net in pihole_net clash_net apps_net; do
 done
 
 # =============================================================================
-# 3. Remove Docker image
+# 3. Remove Docker images
 # =============================================================================
 
-if docker image ls --format '{{.Repository}}:{{.Tag}}' | grep -q "^clash-mihomo:latest$"; then
-  docker rmi clash-mihomo:latest && log "Removed image: clash-mihomo:latest" || warn "Could not remove image"
-fi
+for image in clash-mihomo:latest pihole-custom:latest pihole-clash-sync:latest; do
+  if docker image ls --format '{{.Repository}}:{{.Tag}}' | grep -q "^${image}$"; then
+    docker rmi "$image" && log "Removed image: $image" || warn "Could not remove image: $image"
+  fi
+done
 
 # =============================================================================
 # 4. Remove macvlan interfaces
 # =============================================================================
 
-for iface in macvlan-pihole macvlan-clash macvlan-host macvlan-apps; do
+for iface in macvlan-pihole macvlan-clash; do
   if ip link show "$iface" &>/dev/null; then
     ip link del "$iface" && log "Removed interface: $iface" || warn "Could not remove: $iface"
   fi
@@ -76,8 +81,13 @@ done
 # 5. Remove host routes
 # =============================================================================
 
-ip route del "${PIHOLE_IP}/32" 2>/dev/null && log "Removed route: ${PIHOLE_IP}/32" || warn "Route not found: ${PIHOLE_IP}/32"
-ip route del "${CLASH_IP}/32"  2>/dev/null && log "Removed route: ${CLASH_IP}/32"  || warn "Route not found: ${CLASH_IP}/32"
+ip route del "${PIHOLE_IP}/32" 2>/dev/null \
+  && log "Removed route: ${PIHOLE_IP}/32" \
+  || warn "Route not found: ${PIHOLE_IP}/32"
+
+ip route del "${CLASH_IP}/32" 2>/dev/null \
+  && log "Removed route: ${CLASH_IP}/32" \
+  || warn "Route not found: ${CLASH_IP}/32"
 
 # =============================================================================
 # 6. Remove systemd-networkd config
@@ -96,22 +106,7 @@ systemctl restart systemd-networkd 2>/dev/null || true
 log "Restarted systemd-networkd"
 
 # =============================================================================
-# 7. Remove sync script + systemd timer
-# =============================================================================
-
-systemctl disable --now pihole-clash-sync.timer 2>/dev/null && log "Disabled timer" || warn "Timer not found"
-
-for f in \
-  /etc/systemd/system/pihole-clash-sync.service \
-  /etc/systemd/system/pihole-clash-sync.timer \
-  /usr/local/bin/pihole-to-clash-sync.sh; do
-  [[ -f "$f" ]] && rm -f "$f" && log "Removed: $f" || warn "Not found: $f"
-done
-
-systemctl daemon-reload
-
-# =============================================================================
-# 8. Remove IP forwarding
+# 7. Remove IP forwarding
 # =============================================================================
 
 sed -i '/net.ipv4.ip_forward=1/d' /etc/sysctl.conf
@@ -119,7 +114,7 @@ sysctl -p >/dev/null
 log "IP forwarding disabled"
 
 # =============================================================================
-# 9. Remove stack directory + clash-sync state
+# 8. Remove stack directory + clash-sync state
 # =============================================================================
 
 if [[ -d "$STACK_DIR" ]]; then

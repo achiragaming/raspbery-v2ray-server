@@ -1,0 +1,55 @@
+---
+# =============================================================================
+# docker-compose.sync.yml
+# pihole-to-clash-sync — Node.js daemon
+# Uses a plain bridge network — the host already has routes to PIHOLE_IP and
+# CLASH_IP via macvlan-pihole/macvlan-clash, so the sync container can reach
+# both APIs without needing to join the macvlan networks directly.
+# =============================================================================
+name: sync
+
+networks:
+  sync_bridge:
+    driver: bridge
+
+volumes:
+  clash_sync_state:
+
+services:
+  sync:
+    build:
+      context: ./sync-service
+      dockerfile: Dockerfile
+    image: pihole-clash-sync:latest
+    container_name: pihole-clash-sync
+    hostname: pihole-clash-sync
+    restart: unless-stopped
+
+    networks:
+      - sync_bridge
+
+    env_file:
+      - .env
+
+    environment:
+      PIHOLE_IP:        ${PIHOLE_IP}
+      PIHOLE_PASSWORD:  ${PIHOLE_PASSWORD}
+      CLASH_API:        http://${CLASH_IP}:9090
+      CLASH_SECRET:     ${CLASH_SECRET}
+      SYNC_INTERVAL_MS: ${SYNC_INTERVAL_MS:-60000}
+      BUILD_JS:         /scripts/build.js
+      PROFILES_DIR:     /profiles
+      CONFIG_OUTPUT:    /root/.config/mihomo/config.yaml
+      DEBUG:            ${DEBUG:-false}
+
+    volumes:
+      - clash_sync_state:/var/lib/clash-sync
+      - ./clash/config:/root/.config/mihomo
+      - ./clash/scripts:/scripts
+      - ./clash/profiles:/profiles:ro
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

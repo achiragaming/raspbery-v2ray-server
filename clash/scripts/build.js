@@ -168,11 +168,16 @@ function main(config) {
     "auto-route": true,
     "strict-route": false,
     "auto-detect-interface": true,
+    // Hijack any DNS hitting port 53 and hand it to Clash's own resolver (5353).
+    // The iptables DNAT in entrypoint.sh then redirects non-Pi-hole DNS to
+    // Pi-hole:53 before it even reaches here, so the chain is:
+    //   LAN client → iptables DNAT → Pi-hole:53 → Clash:5353 → DoH
     "dns-hijack": ["any:53"],
     "route-exclude-address": [
       ...new Set([
         LAN_CIDR,
         PIHOLE_IP + "/32",
+        CLASH_IP + "/32",
         "127.0.0.1/32",
         ...vpnServers.filter(isIP).map((s) => s + "/32"),
       ]),

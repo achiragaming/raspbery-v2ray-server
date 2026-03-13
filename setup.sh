@@ -2,10 +2,9 @@
 # =============================================================================
 # setup.sh — run once as root to bootstrap the whole stack
 # Creates two macvlan sub-interfaces on the physical NIC so each container
-# gets its own physically separate virtual interface — no shared binding
+# gets its own physically separate virtual interface — no shared binding.
 # =============================================================================
 set -euo pipefail
-
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -20,7 +19,7 @@ else
 fi
 
 # Defaults in case .env is missing any
-STACK_DIR="${STACK_DIR:-"/opt/clash-stack"}" 
+STACK_DIR="${STACK_DIR:-/opt/clash-stack}"
 HOST_IFACE="${HOST_IFACE:-enp2s0}"
 LAN_SUBNET="${LAN_SUBNET:-192.168.8.0/24}"
 LAN_GATEWAY="${LAN_GATEWAY:-192.168.8.1}"
@@ -52,14 +51,13 @@ for iface in macvlan-pihole macvlan-clash; do
   fi
 done
 
-# NOTE: We do NOT assign the container IPs to the host-side macvlan interfaces
+# NOTE: We do NOT assign the container IPs to the host-side macvlan interfaces.
 # Doing so causes the host to answer ARP for those IPs, stealing them from
 # the containers and making them unreachable from the LAN.
 # Macvlan host↔container isolation is a known limitation — access Pi-hole
 # and Clash dashboards from another LAN device (phone, other PC).
 
-# Routes so the host can route traffic toward the macvlan interfaces
-# (used by the sync script to reach Pi-hole/Clash from the host)
+# Routes so the host can reach Pi-hole/Clash through the macvlan interfaces
 ip route add "${PIHOLE_IP}/32" dev macvlan-pihole metric 50 2>/dev/null \
   || warn "${PIHOLE_IP}/32 route already exists"
 ip route add "${CLASH_IP}/32"  dev macvlan-clash  metric 50 2>/dev/null \
@@ -129,6 +127,7 @@ log "Macvlan interfaces will persist across reboots"
 # 3. Create Docker networks
 #    Each uses its own macvlan interface as parent — different parents allow
 #    same subnet. Non-overlapping --ip-range satisfies Docker's pool manager.
+#    No --gateway: containers set their own default route via their entrypoints.
 # =============================================================================
 
 if docker network ls --format '{{.Name}}' | grep -q "^pihole_net$"; then
@@ -137,7 +136,6 @@ else
   docker network create \
     --driver macvlan \
     --subnet "$LAN_SUBNET" \
-    --gateway "$LAN_GATEWAY" \
     --ip-range "$PIHOLE_RANGE" \
     --opt parent=macvlan-pihole \
     pihole_net
@@ -160,17 +158,27 @@ fi
 # 4. Directory structure + copy files
 # =============================================================================
 
-# 4. Directory structure + copy files
-mkdir -p "$STACK_DIR/clash/config" "$STACK_DIR/clash/profiles" "$STACK_DIR/clash/scripts"
+mkdir -p "$STACK_DIR/clash/config" \
+         "$STACK_DIR/clash/profiles" \
+         "$STACK_DIR/clash/scripts" \
+         "$STACK_DIR/pihole/scripts" \
+         "$STACK_DIR/sync-service/src"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-cp "$SCRIPT_DIR/docker-compose.pihole.yml" "$STACK_DIR/"
 cp "$SCRIPT_DIR/docker-compose.clash.yml"  "$STACK_DIR/"
-cp "$SCRIPT_DIR/Dockerfile"       "$STACK_DIR/"
-cp "$SCRIPT_DIR/clash/scripts/entrypoint.sh"       "$STACK_DIR/clash/scripts/"
-cp "$SCRIPT_DIR/clash/scripts/build.js"       "$STACK_DIR/clash/scripts/"
-cp "$SCRIPT_DIR/clash/scripts/package.json"   "$STACK_DIR/clash/scripts/"
+cp "$SCRIPT_DIR/docker-compose.pihole.yml" "$STACK_DIR/"
+cp "$SCRIPT_DIR/docker-compose.sync.yml"   "$STACK_DIR/"
+cp "$SCRIPT_DIR/clash/Dockerfile"          "$STACK_DIR/clash/"
+cp "$SCRIPT_DIR/pihole/Dockerfile"         "$STACK_DIR/pihole/"
+
+cp "$SCRIPT_DIR/clash/scripts/entrypoint.sh" "$STACK_DIR/clash/scripts/"
+cp "$SCRIPT_DIR/clash/scripts/build.js"      "$STACK_DIR/clash/scripts/"
+cp "$SCRIPT_DIR/clash/scripts/package.json"  "$STACK_DIR/clash/scripts/"
+
+cp "$SCRIPT_DIR/pihole/scripts/entrypoint.sh"    "$STACK_DIR/pihole/scripts/"
+
+cp "$SCRIPT_DIR/sync-service/Dockerfile"     "$STACK_DIR/sync-service/"
+cp "$SCRIPT_DIR/sync-service/package.json"   "$STACK_DIR/sync-service/"
+cp "$SCRIPT_DIR/sync-service/src/index.js"   "$STACK_DIR/sync-service/src/"
 
 for f in "$SCRIPT_DIR/clash/profiles/"*.yml; do
   dest="$STACK_DIR/clash/profiles/$(basename "$f")"
@@ -180,50 +188,26 @@ done
 [[ ! -f "$STACK_DIR/.env" ]] && cp "$SCRIPT_DIR/.env" "$STACK_DIR/" && log "Copied .env"
 
 # =============================================================================
-# 5. Sync script + systemd timer
+# 5. Build + start all containers
 # =============================================================================
 
-# 5. Sync script + systemd timer
-cp "$SCRIPT_DIR/common/scripts/pihole-to-clash-sync.sh" /usr/local/bin/
-chmod +x /usr/local/bin/pihole-to-clash-sync.sh
-log "Installed sync script"
+log "Building Clash image..."
+docker compose -f "$STACK_DIR/docker-compose.clash.yml" build
 
-# Write service file dynamically so EnvironmentFile path matches STACK_DIR
-cat > /etc/systemd/system/pihole-clash-sync.service << SVCEOF
-[Unit]
-Description=Sync Pi-hole local DNS records into Clash hosts
-After=network-online.target
-Wants=network-online.target
+log "Building Pi-hole image..."
+docker compose -f "$STACK_DIR/docker-compose.pihole.yml" build
 
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/pihole-to-clash-sync.sh
-EnvironmentFile=${STACK_DIR}/.env
-StandardOutput=journal
-StandardError=journal
-User=root
-PrivateTmp=true
-NoNewPrivileges=true
-SVCEOF
+log "Building sync service image..."
+docker compose -f "$STACK_DIR/docker-compose.sync.yml" build
 
-cat > /etc/systemd/system/pihole-clash-sync.timer << SVCEOF
-[Unit]
-Description=Periodic Pi-hole → Clash DNS sync (every 60s)
-Requires=pihole-clash-sync.service
+log "Starting Clash..."
+docker compose -f "$STACK_DIR/docker-compose.clash.yml" up -d
 
-[Timer]
-OnBootSec=30sec
-OnUnitActiveSec=60sec
-AccuracySec=5sec
-Persistent=true
+log "Starting Pi-hole..."
+docker compose -f "$STACK_DIR/docker-compose.pihole.yml" up -d
 
-[Install]
-WantedBy=timers.target
-SVCEOF
-
-systemctl daemon-reload
-systemctl enable --now pihole-clash-sync.timer
-log "Systemd timer enabled (every 60s)"
+log "Starting sync service..."
+docker compose -f "$STACK_DIR/docker-compose.sync.yml" up -d
 
 # =============================================================================
 # 6. IP forwarding
@@ -237,20 +221,19 @@ grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf || {
 
 echo ""
 echo "  Interface layout:"
-echo "    ${HOST_IFACE} (physical, host IP: $(ip -4 addr show ${HOST_IFACE} | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1))"
+echo "    ${HOST_IFACE} (physical, host IP: $(ip -4 addr show "${HOST_IFACE}" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1))"
 echo "    ├── macvlan-pihole → pihole_net → ${PIHOLE_IP} (Pi-hole)"
 echo "    └── macvlan-clash  → clash_net  → ${CLASH_IP}  (Clash)"
 echo ""
-echo "     Pi-hole: https://${PIHOLE_IP}"
-echo "     Clash:   http://${CLASH_IP}:9090"
+echo "     Pi-hole : https://${PIHOLE_IP}"
+echo "     Clash   : http://${CLASH_IP}:9090"
+echo "     Sync    : docker logs -f pihole-clash-sync"
+echo ""
+echo "  DNS traffic flow:"
+echo "    LAN client → Pi-hole:53 (filter) → Clash:53 (resolve) → Cloudflare DoH"
+echo "    Clients with hardcoded DNS → iptables DNAT → Pi-hole:53 (hijacked)"
 echo ""
 echo "  Next steps:"
-echo "  1. Edit $STACK_DIR/.env"
-echo "       → set CLASH_SECRET and PIHOLE_PASSWORD"
-echo "  2. Edit $STACK_DIR/clash/config/config.yaml"
-echo "       → set secret: to match CLASH_SECRET"
-echo "  3. docker compose -f $STACK_DIR/docker-compose.pihole.yml up -d"
-echo "  4. docker compose -f $STACK_DIR/docker-compose.clash.yml up -d"
-echo ""
-echo "  Add nodes: drop a .yml into $STACK_DIR/clash/profiles/"
+echo "  1. Edit $STACK_DIR/.env — set CLASH_SECRET and PIHOLE_PASSWORD"
+echo "  2. Drop proxy nodes into $STACK_DIR/clash/profiles/"
 echo ""

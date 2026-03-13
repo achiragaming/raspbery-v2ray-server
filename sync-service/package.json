@@ -1,0 +1,15 @@
+{
+  "name": "pihole-to-clash-sync",
+  "version": "2.0.0",
+  "description": "Syncs Pi-hole v6 DNS hosts into Clash Meta — Node.js daemon (replaces bash cron)",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -185,10 +185,10 @@ for f in "$SCRIPT_DIR/clash/profiles/"*.yml; do
   [[ ! -f "$dest" ]] && cp "$f" "$dest" && log "Copied profile: $(basename "$f")"
 done
 
-[[ ! -f "$STACK_DIR/.env" ]] && cp "$SCRIPT_DIR/.env" "$STACK_DIR/" && log "Copied .env"
+[[ ! -f "$STACK_DIR/.env" ]] && cp "$SCRIPT_DIR/.env" "$STACK_DIR/" && chmod 600 "$STACK_DIR/.env" && log "Copied .env"
 
 # =============================================================================
-# 5. Build + start all containers
+# 5. Build all containers
 # =============================================================================
 
 log "Building Clash image..."
@@ -200,6 +200,20 @@ docker compose -f "$STACK_DIR/docker-compose.pihole.yml" build
 log "Building sync service image..."
 docker compose -f "$STACK_DIR/docker-compose.sync.yml" build
 
+# =============================================================================
+# 6. Enable IP forwarding (required before containers start)
+# =============================================================================
+
+grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf || {
+  echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+  sysctl -p >/dev/null
+  log "IP forwarding enabled"
+}
+
+# =============================================================================
+# 7. Start all containers
+# =============================================================================
+
 log "Starting Clash..."
 docker compose -f "$STACK_DIR/docker-compose.clash.yml" up -d
 
@@ -208,16 +222,6 @@ docker compose -f "$STACK_DIR/docker-compose.pihole.yml" up -d
 
 log "Starting sync service..."
 docker compose -f "$STACK_DIR/docker-compose.sync.yml" up -d
-
-# =============================================================================
-# 6. IP forwarding
-# =============================================================================
-
-grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf || {
-  echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
-  sysctl -p >/dev/null
-  log "IP forwarding enabled"
-}
 
 echo ""
 echo "  Interface layout:"

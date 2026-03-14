@@ -9,7 +9,8 @@ FROM pihole/pihole:latest
 
 # ── Gateway-fixup wrapper ─────────────────────────────────────────────────────
 # iproute2 may already be present in the pihole image; install anyway to be safe
-RUN apk add --no-cache iproute2
+RUN apt-get update && apt-get install -y --no-install-recommends iproute2 \
+    && rm -rf /var/lib/apt/lists/*
 
 
 COPY scripts/entrypoint.sh /entrypoint.sh

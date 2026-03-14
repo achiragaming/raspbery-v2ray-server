@@ -246,11 +246,23 @@ function updateNameserverPolicyInBuildJs(policyPatterns) {
 }
 
 async function rebuildAndReloadClash() {
-  // Rebuild config.yaml by running build.js directly (we share the same node runtime)
   log("Rebuilding Clash config...");
-  // Invalidate require cache and re-run build.js
-  delete require.cache[require.resolve(cfg.BUILD_JS)];
-  require(cfg.BUILD_JS);
+
+  // Run build.js as a child process with NODE_PATH pointing to our node_modules
+  // so js-yaml is resolvable even though build.js lives in /scripts
+  await new Promise((resolve, reject) => {
+    const { execFile } = require("child_process");
+    execFile(
+      process.execPath, // same node binary
+      [cfg.BUILD_JS],
+      { env: { ...process.env, NODE_PATH: "/app/node_modules" } },
+      (err, stdout, stderr) => {
+        if (stdout) stdout.trim().split("\n").forEach((l) => log(`[build] ${l}`));
+        if (err) return reject(new Error(stderr || err.message));
+        resolve();
+      }
+    );
+  });
 
   // Hot-reload Clash
   const res = await request(

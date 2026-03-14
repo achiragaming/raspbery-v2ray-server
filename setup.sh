@@ -162,7 +162,7 @@ mkdir -p "$STACK_DIR/clash/config" \
          "$STACK_DIR/clash/profiles" \
          "$STACK_DIR/clash/scripts" \
          "$STACK_DIR/pihole/scripts" \
-         "$STACK_DIR/sync-service/src"
+         "$STACK_DIR/sync-service/scripts"
 
 cp "$SCRIPT_DIR/docker-compose.clash.yml"  "$STACK_DIR/"
 cp "$SCRIPT_DIR/docker-compose.pihole.yml" "$STACK_DIR/"
@@ -177,8 +177,8 @@ cp "$SCRIPT_DIR/clash/scripts/package.json"  "$STACK_DIR/clash/scripts/"
 cp "$SCRIPT_DIR/pihole/scripts/entrypoint.sh"    "$STACK_DIR/pihole/scripts/"
 
 cp "$SCRIPT_DIR/sync-service/Dockerfile"     "$STACK_DIR/sync-service/"
-cp "$SCRIPT_DIR/sync-service/package.json"   "$STACK_DIR/sync-service/"
-cp "$SCRIPT_DIR/sync-service/src/index.js"   "$STACK_DIR/sync-service/src/"
+cp "$SCRIPT_DIR/sync-service/scripts/package.json"   "$STACK_DIR/sync-service/scripts/"
+cp "$SCRIPT_DIR/sync-service/scripts/index.js"   "$STACK_DIR/sync-service/scripts/"
 
 for f in "$SCRIPT_DIR/clash/profiles/"*.yml; do
   dest="$STACK_DIR/clash/profiles/$(basename "$f")"

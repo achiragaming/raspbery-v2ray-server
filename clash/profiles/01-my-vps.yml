@@ -7,7 +7,7 @@
 proxies:
   - name: "My-VPS-SG"
     type: vless
-    server: xxx.xxx.xxx.xxx
+    server: xxx.xxxxxx.xxxx
     port: 443
     uuid: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
     tls: true

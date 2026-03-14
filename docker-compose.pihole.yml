@@ -60,6 +60,13 @@ services:
       - pihole_dnsmasq:/etc/dnsmasq.d
       - /etc/localtime:/etc/localtime:ro
 
+    healthcheck:
+      test: ["CMD", "dig", "+short", "@127.0.0.1", "pi.hole", "+time=2", "+tries=1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
     cap_add:
       - NET_ADMIN        # iptables / network setup inside container
       - NET_BIND_SERVICE

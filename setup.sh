@@ -38,6 +38,50 @@ echo "└───────────────────────�
 echo ""
 
 # =============================================================================
+# 0. Check and install required packages
+# =============================================================================
+
+echo "  Checking dependencies..."
+
+apt_updated=false
+
+apt_install() {
+  local pkg="$1"
+  if ! dpkg -s "$pkg" &>/dev/null; then
+    if [[ "$apt_updated" == false ]]; then
+      apt-get update -qq
+      apt_updated=true
+    fi
+    apt-get install -y --no-install-recommends "$pkg" -qq
+    log "Installed: $pkg"
+  else
+    log "Already installed: $pkg"
+  fi
+}
+
+apt_install iproute2
+apt_install iptables
+apt_install curl
+apt_install ca-certificates
+apt_install isc-dhcp-client
+
+if ! command -v docker &>/dev/null; then
+  warn "Docker not found — installing via get.docker.com..."
+  curl -fsSL https://get.docker.com | sh
+  systemctl enable --now docker
+  log "Docker installed"
+else
+  log "Already installed: docker ($(docker --version | cut -d' ' -f3 | tr -d ','))"
+fi
+
+if ! docker compose version &>/dev/null; then
+  warn "Docker Compose plugin not found — installing..."
+  apt_install docker-compose-plugin
+else
+  log "Already installed: docker compose ($(docker compose version --short))"
+fi
+
+# =============================================================================
 # 1. Create macvlan sub-interfaces on the physical NIC
 # =============================================================================
 
@@ -54,7 +98,7 @@ done
 # NOTE: We do NOT assign the container IPs to the host-side macvlan interfaces.
 # Doing so causes the host to answer ARP for those IPs, stealing them from
 # the containers and making them unreachable from the LAN.
-# Macvlan host↔container isolation is a known limitation — access Pi-hole
+# Macvlan host<->container isolation is a known limitation — access Pi-hole
 # and Clash dashboards from another LAN device (phone, other PC).
 
 # Routes so the host can reach Pi-hole/Clash through the macvlan interfaces
@@ -174,11 +218,11 @@ cp "$SCRIPT_DIR/clash/scripts/entrypoint.sh" "$STACK_DIR/clash/scripts/"
 cp "$SCRIPT_DIR/clash/scripts/build.js"      "$STACK_DIR/clash/scripts/"
 cp "$SCRIPT_DIR/clash/scripts/package.json"  "$STACK_DIR/clash/scripts/"
 
-cp "$SCRIPT_DIR/pihole/scripts/entrypoint.sh"    "$STACK_DIR/pihole/scripts/"
+cp "$SCRIPT_DIR/pihole/scripts/entrypoint.sh" "$STACK_DIR/pihole/scripts/"
 
-cp "$SCRIPT_DIR/sync-service/Dockerfile"     "$STACK_DIR/sync-service/"
-cp "$SCRIPT_DIR/sync-service/scripts/package.json"   "$STACK_DIR/sync-service/scripts/"
-cp "$SCRIPT_DIR/sync-service/scripts/index.js"   "$STACK_DIR/sync-service/scripts/"
+cp "$SCRIPT_DIR/sync-service/Dockerfile"           "$STACK_DIR/sync-service/"
+cp "$SCRIPT_DIR/sync-service/scripts/package.json" "$STACK_DIR/sync-service/scripts/"
+cp "$SCRIPT_DIR/sync-service/scripts/index.js"     "$STACK_DIR/sync-service/scripts/"
 
 for f in "$SCRIPT_DIR/clash/profiles/"*.yml; do
   dest="$STACK_DIR/clash/profiles/$(basename "$f")"
@@ -214,7 +258,7 @@ grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf || {
 # 7. File descriptor limits
 #    Default 1024 is too low for Clash under heavy load — connections time out
 # =============================================================================
- 
+
 # Save original values before we change anything so uninstall can restore them
 ORIG_SOFT=$(ulimit -Sn)
 ORIG_HARD=$(ulimit -Hn)
@@ -222,13 +266,13 @@ mkdir -p "$STACK_DIR"
 echo "$ORIG_SOFT" > "$STACK_DIR/.ulimit-soft.bak"
 echo "$ORIG_HARD" > "$STACK_DIR/.ulimit-hard.bak"
 log "Saved original ulimits (soft=$ORIG_SOFT hard=$ORIG_HARD)"
- 
+
 grep -q "nofile" /etc/security/limits.conf || {
   echo "* soft nofile 1000000" >> /etc/security/limits.conf
   echo "* hard nofile 1000000" >> /etc/security/limits.conf
   log "File descriptor limits set to 1000000"
 }
- 
+
 grep -q "DefaultLimitNOFILE" /etc/systemd/system.conf || {
   echo "DefaultLimitNOFILE=1000000" >> /etc/systemd/system.conf
   systemctl daemon-reexec
@@ -236,7 +280,36 @@ grep -q "DefaultLimitNOFILE" /etc/systemd/system.conf || {
 }
 
 # =============================================================================
-# 8. Start all containers
+# 8. Fair queuing (fq_codel)
+#    Automatically shares bandwidth fairly between devices — no per-device
+#    config needed. High-usage devices get throttled when others need bandwidth,
+#    and get full speed back when others are idle.
+# =============================================================================
+
+tc qdisc replace dev "$HOST_IFACE" root fq_codel 2>/dev/null && \
+  log "fq_codel applied to $HOST_IFACE" || \
+  warn "Could not apply fq_codel to $HOST_IFACE"
+
+cat > /etc/systemd/system/fq-codel.service << EOF
+[Unit]
+Description=Apply fq_codel fair queuing to $HOST_IFACE
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/tc qdisc replace dev $HOST_IFACE root fq_codel
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl enable --now fq-codel.service 2>/dev/null && \
+  log "fq-codel.service enabled (persists across reboots)" || \
+  warn "Could not enable fq-codel.service"
+
+# =============================================================================
+# 9. Start all containers
 # =============================================================================
 
 log "Starting Clash..."

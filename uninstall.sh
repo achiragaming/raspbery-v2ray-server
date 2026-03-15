@@ -66,19 +66,8 @@ for image in clash-mihomo:latest pihole-custom:latest pihole-clash-sync:latest; 
     docker rmi "$image" && log "Removed image: $image" || warn "Could not remove image: $image"
   fi
 done
-
 # =============================================================================
-# 4. Remove macvlan interfaces
-# =============================================================================
-
-for iface in macvlan-pihole macvlan-clash; do
-  if ip link show "$iface" &>/dev/null; then
-    ip link del "$iface" && log "Removed interface: $iface" || warn "Could not remove: $iface"
-  fi
-done
-
-# =============================================================================
-# 5. Remove host routes
+# 4. Remove host routes
 # =============================================================================
 
 ip route del "${PIHOLE_IP}/32" 2>/dev/null \
@@ -88,6 +77,17 @@ ip route del "${PIHOLE_IP}/32" 2>/dev/null \
 ip route del "${CLASH_IP}/32" 2>/dev/null \
   && log "Removed route: ${CLASH_IP}/32" \
   || warn "Route not found: ${CLASH_IP}/32"
+
+
+# =============================================================================
+# 5. Remove macvlan interfaces
+# =============================================================================
+
+for iface in macvlan-pihole macvlan-clash; do
+  if ip link show "$iface" &>/dev/null; then
+    ip link del "$iface" && log "Removed interface: $iface" || warn "Could not remove: $iface"
+  fi
+done
 
 # =============================================================================
 # 6. Remove systemd-networkd config
@@ -114,7 +114,17 @@ sysctl -p >/dev/null
 log "IP forwarding disabled"
 
 # =============================================================================
-# 8. Restore original file descriptor limits
+# 8. Remove fq_codel fair queuing
+# =============================================================================
+ 
+systemctl disable --now fq-codel.service 2>/dev/null && log "Disabled fq-codel.service" || warn "fq-codel.service not found"
+rm -f /etc/systemd/system/fq-codel.service
+systemctl daemon-reload
+ 
+# Remove the qdisc from the interface
+tc qdisc del dev "$HOST_IFACE" root 2>/dev/null && log "Removed fq_codel from $HOST_IFACE" || warn "No qdisc found on $HOST_IFACE"
+# =============================================================================
+# 9. Restore original file descriptor limits
 # =============================================================================
  
 SOFT_BAK="$STACK_DIR/.ulimit-soft.bak"
@@ -143,7 +153,7 @@ else
 fi
 
 # =============================================================================
-# 9. Remove stack directory + clash-sync state
+# 10. Remove stack directory + clash-sync state
 # =============================================================================
 
 if [[ -d "$STACK_DIR" ]]; then

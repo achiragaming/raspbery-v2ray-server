@@ -106,6 +106,10 @@ function main(config) {
     "10.*",
     "172.16.*",
     "127.0.0.1",
+    "time.windows.com",
+    "time.apple.com", 
+    "pool.ntp.org",
+    "*.pool.ntp.org",
   ];
   // ── END CONFIGURATION ──────────────────────────────────────────────────────
 
@@ -142,15 +146,15 @@ function main(config) {
       "https://1.1.1.1/dns-query", // Cloudflare DoH
       "https://8.8.8.8/dns-query", // Google DoH
     ],
-    'proxy-server-nameserver': [LAN_DNS],
+    "proxy-server-nameserver": [LAN_DNS],
     "default-nameserver": [LAN_DNS],
-      'nameserver-policy': {
-    '*.lan':      PIHOLE_IP,
-    '*.local':    PIHOLE_IP,
-    '*.internal': PIHOLE_IP,
-    '*.home':     PIHOLE_IP,
-    'pi.hole':    PIHOLE_IP,
-  },
+    "nameserver-policy": {
+      "*.lan": PIHOLE_IP,
+      "*.local": PIHOLE_IP,
+      "*.internal": PIHOLE_IP,
+      "*.home": PIHOLE_IP,
+      "pi.hole": PIHOLE_IP,
+    },
     "fake-ip-filter": [
       ...new Set([
         ...vpnServers,

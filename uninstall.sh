@@ -114,7 +114,36 @@ sysctl -p >/dev/null
 log "IP forwarding disabled"
 
 # =============================================================================
-# 8. Remove stack directory + clash-sync state
+# 8. Restore original file descriptor limits
+# =============================================================================
+ 
+SOFT_BAK="$STACK_DIR/.ulimit-soft.bak"
+HARD_BAK="$STACK_DIR/.ulimit-hard.bak"
+ 
+if [[ -f "$SOFT_BAK" && -f "$HARD_BAK" ]]; then
+  ORIG_SOFT=$(cat "$SOFT_BAK")
+  ORIG_HARD=$(cat "$HARD_BAK")
+ 
+  # Restore limits.conf
+  sed -i '/nofile/d' /etc/security/limits.conf
+  echo "* soft nofile $ORIG_SOFT" >> /etc/security/limits.conf
+  echo "* hard nofile $ORIG_HARD" >> /etc/security/limits.conf
+  log "Restored ulimits to original (soft=$ORIG_SOFT hard=$ORIG_HARD)"
+ 
+  # Restore systemd
+  sed -i '/DefaultLimitNOFILE/d' /etc/systemd/system.conf
+  systemctl daemon-reexec
+  log "Restored systemd file descriptor limit"
+else
+  # No backup found — just remove our entries
+  sed -i '/nofile/d' /etc/security/limits.conf
+  sed -i '/DefaultLimitNOFILE/d' /etc/systemd/system.conf
+  systemctl daemon-reexec
+  warn "No ulimit backup found — removed entries without restoring"
+fi
+
+# =============================================================================
+# 9. Remove stack directory + clash-sync state
 # =============================================================================
 
 if [[ -d "$STACK_DIR" ]]; then

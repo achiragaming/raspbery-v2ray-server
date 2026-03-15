@@ -211,7 +211,32 @@ grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf || {
 }
 
 # =============================================================================
-# 7. Start all containers
+# 7. File descriptor limits
+#    Default 1024 is too low for Clash under heavy load — connections time out
+# =============================================================================
+ 
+# Save original values before we change anything so uninstall can restore them
+ORIG_SOFT=$(ulimit -Sn)
+ORIG_HARD=$(ulimit -Hn)
+mkdir -p "$STACK_DIR"
+echo "$ORIG_SOFT" > "$STACK_DIR/.ulimit-soft.bak"
+echo "$ORIG_HARD" > "$STACK_DIR/.ulimit-hard.bak"
+log "Saved original ulimits (soft=$ORIG_SOFT hard=$ORIG_HARD)"
+ 
+grep -q "nofile" /etc/security/limits.conf || {
+  echo "* soft nofile 1000000" >> /etc/security/limits.conf
+  echo "* hard nofile 1000000" >> /etc/security/limits.conf
+  log "File descriptor limits set to 1000000"
+}
+ 
+grep -q "DefaultLimitNOFILE" /etc/systemd/system.conf || {
+  echo "DefaultLimitNOFILE=1000000" >> /etc/systemd/system.conf
+  systemctl daemon-reexec
+  log "Systemd file descriptor limit set to 1000000"
+}
+
+# =============================================================================
+# 8. Start all containers
 # =============================================================================
 
 log "Starting Clash..."

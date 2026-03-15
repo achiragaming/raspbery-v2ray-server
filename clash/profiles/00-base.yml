@@ -47,4 +47,5 @@ proxy-groups:
 
 # Base rules — All traffic now flows through the Proxy group by default
 rules:
+  - DST-PORT,123,DIRECT
   - MATCH,🚀 Proxy

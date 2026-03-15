@@ -36,7 +36,10 @@ services:
       - NET_ADMIN        # ip route, iptables, TUN
       - NET_BIND_SERVICE # bind ports < 1024
       - SYS_PTRACE       # mihomo process inspection
-
+    ulimits:
+      nofile:
+        soft: 1000000
+        hard: 1000000
     sysctls:
       - net.ipv4.ip_forward=1
       - net.ipv4.conf.all.forwarding=1

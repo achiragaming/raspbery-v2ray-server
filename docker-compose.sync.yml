@@ -48,6 +48,12 @@ services:
       - ./clash/scripts:/scripts
       - ./clash/profiles:/profiles:ro
 
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://${CLASH_IP}:9090/configs", "-O", "/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
     logging:
       driver: json-file
       options:

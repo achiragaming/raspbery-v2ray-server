@@ -196,14 +196,13 @@ function main(config) {
   // Auto-populate proxy groups with all nodes
 if (config["proxy-groups"]) {
   const allProxyNames = (config.proxies || []).map(p => p.name);
-  const otherNodes = allProxyNames.filter(p => p !== VPS_PROFILE_NAME);
 
   // Add a load-balance group for non-preferred nodes
   const lbGroup = {
     name: "⚖️ Balance",
     type: "load-balance",
     strategy: "round-robin",
-    proxies: [...otherNodes, "DIRECT"],
+    proxies: [...allProxyNames, "DIRECT"],
     url: "http://www.gstatic.com/generate_204",
     interval: 180,
     timeout: 2000,

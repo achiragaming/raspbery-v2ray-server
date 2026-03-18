@@ -136,6 +136,7 @@ function main(config) {
   log(
     `Auto-detected ${vpnServers.length} VPN server(s): ${vpnServers.join(", ")}`,
   );
+  log(`Preffered Node is: ${VPS_PROFILE_NAME}`)
 
   // DNS
   config.dns = {
@@ -193,25 +194,40 @@ function main(config) {
   config["secret"] = SECRET;
 
   // Auto-populate proxy groups with all nodes
-  if (config["proxy-groups"]) {
-    config["proxy-groups"].forEach((group) => {
-      // Find the group with the Rocket or "Proxy" in the name
-      if (group.name.includes("Proxy") || group.name.includes("🚀")) {
-        log(`Configuring ${group.name} for Fallback (Priority: VPS)`);
+if (config["proxy-groups"]) {
+  const allProxyNames = (config.proxies || []).map(p => p.name);
+  const otherNodes = allProxyNames.filter(p => p !== VPS_PROFILE_NAME);
 
-        group.type = "fallback"; // Stays on VPS unless it's dead
-        group.url = "http://www.gstatic.com/generate_204";
-        group.interval = 180; // Check every 3 mins
+  // Add a load-balance group for non-preferred nodes
+  const lbGroup = {
+    name: "⚖️ Balance",
+    type: "load-balance",
+    strategy: "round-robin",
+    proxies: [...otherNodes, "DIRECT"],
+    url: "http://www.gstatic.com/generate_204",
+    interval: 180,
+    timeout: 2000,
+    lazy: false,
+  };
 
-        // Force VPS to index 0, DIRECT to last
-        let otherNodes = group.proxies.filter(
-          (p) => p !== VPS_PROFILE_NAME && p !== "DIRECT",
-        );
-        group.proxies = [VPS_PROFILE_NAME, ...otherNodes, "DIRECT"];
-      }
-    });
+  config["proxy-groups"].forEach((group) => {
+    if (group.name.includes("Proxy") || group.name.includes("🚀")) {
+      log(`Configuring ${group.name} for Fallback (Priority: VPS)`);
+      group.type = "fallback";
+      group.url = "http://www.gstatic.com/generate_204";
+      group.interval = 180;
+      group.timeout = 2000;
+      group.lazy = false;
+      // Preferred VPS first, then load-balance group, then DIRECT
+      group.proxies = [VPS_PROFILE_NAME, "⚖️ Balance", "DIRECT"];
+    }
+  });
+
+  // Inject the balance group if not already present
+  if (!config["proxy-groups"].find(g => g.name === "⚖️ Balance")) {
+    config["proxy-groups"].push(lbGroup);
   }
-
+}
   // Rules
   const vpnBypassRules = vpnServers.map((s) =>
     isIP(s)

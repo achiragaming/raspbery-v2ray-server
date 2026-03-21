@@ -27,7 +27,7 @@ PIHOLE_IP="${PIHOLE_IP:-192.168.8.202}"
 CLASH_IP="${CLASH_IP:-192.168.8.206}"
 PIHOLE_RANGE="${PIHOLE_RANGE:-192.168.8.201/30}"
 CLASH_RANGE="${CLASH_RANGE:-192.168.8.205/30}"
-APPS_RANGE="${APPS_RANGE:-192.168.8.209/30}"
+APPS_RANGE="${APPS_RANGE:-192.168.8.209/29}"
 
 log()  { echo "  ✔ $*"; }
 warn() { echo "  ⚠ $*"; }
@@ -102,10 +102,12 @@ done
 # and Clash dashboards from another LAN device (phone, other PC).
 
 # Routes so the host can reach Pi-hole/Clash through the macvlan interfaces
-ip route add "${PIHOLE_IP}/32" dev macvlan-pihole metric 50 2>/dev/null \
-  || warn "${PIHOLE_IP}/32 route already exists"
-ip route add "${CLASH_IP}/32" dev macvlan-clash metric 50 2>/dev/null \
-  || warn "${CLASH_IP}/32 route already exists"
+ip route add "${PIHOLE_RANGE}" dev macvlan-pihole metric 50 2>/dev/null \
+  || warn "${PIHOLE_RANGE} route already exists"
+ip route add "${CLASH_RANGE}" dev macvlan-clash metric 50 2>/dev/null \
+  || warn "${CLASH_RANGE} route already exists"
+ip route add "${APPS_RANGE}" dev macvlan-apps metric 50 2>/dev/null \
+  || warn "${APPS_RANGE} route already exists"
 
 log "Host-side routes configured"
 
@@ -130,7 +132,7 @@ Name=macvlan-pihole
 # No address assigned — assigning the container IP here steals it from the container
 
 [Route]
-Destination=${PIHOLE_IP}/32
+Destination=${PIHOLE_RANGE}
 Metric=50
 EOF
 
@@ -151,7 +153,7 @@ Name=macvlan-clash
 # No address assigned — assigning the container IP here steals it from the container
 
 [Route]
-Destination=${CLASH_IP}/32
+Destination=${CLASH_RANGE}
 Metric=50
 EOF
 
@@ -170,6 +172,10 @@ Name=macvlan-apps
 
 [Network]
 # No address assigned — containers on apps_net get IPs from APPS_RANGE
+
+[Route]
+Destination=${APPS_RANGE}
+Metric=50
 EOF
 
 cat > /etc/systemd/network/10-macvlan-parent.network <<EOF

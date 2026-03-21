@@ -21,6 +21,9 @@ PIHOLE_IP="${PIHOLE_IP:-192.168.8.202}"
 CLASH_IP="${CLASH_IP:-192.168.8.206}"
 STACK_DIR="${STACK_DIR:-/opt/clash-stack}"
 HOST_IFACE="${HOST_IFACE:-enp2s0}"
+PIHOLE_RANGE="${PIHOLE_RANGE:-192.168.8.201/30}"
+CLASH_RANGE="${CLASH_RANGE:-192.168.8.205/30}"
+APPS_RANGE="${APPS_RANGE:-192.168.8.209/29}"
 
 log()  { echo "  ✔ $*"; }
 warn() { echo "  ⚠ $*"; }
@@ -72,13 +75,17 @@ done
 # 4. Remove host routes
 # =============================================================================
 
-ip route del "${PIHOLE_IP}/32" 2>/dev/null \
-  && log "Removed route: ${PIHOLE_IP}/32" \
-  || warn "Route not found: ${PIHOLE_IP}/32"
+ip route del "${PIHOLE_RANGE}" 2>/dev/null \
+  && log "Removed route: ${PIHOLE_RANGE}" \
+  || warn "Route not found: ${PIHOLE_RANGE}"
 
-ip route del "${CLASH_IP}/32" 2>/dev/null \
-  && log "Removed route: ${CLASH_IP}/32" \
-  || warn "Route not found: ${CLASH_IP}/32"
+ip route del "${CLASH_RANGE}" 2>/dev/null \
+  && log "Removed route: ${CLASH_RANGE}" \
+  || warn "Route not found: ${CLASH_RANGE}"
+
+ip route del "${APPS_RANGE}" 2>/dev/null \
+  && log "Removed route: ${APPS_RANGE}" \
+  || warn "Route not found: ${APPS_RANGE}"
 
 # =============================================================================
 # 5. Remove macvlan interfaces

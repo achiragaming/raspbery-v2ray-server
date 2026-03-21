@@ -23,10 +23,11 @@ STACK_DIR="${STACK_DIR:-/opt/clash-stack}"
 HOST_IFACE="${HOST_IFACE:-enp2s0}"
 LAN_SUBNET="${LAN_SUBNET:-192.168.8.0/24}"
 LAN_GATEWAY="${LAN_GATEWAY:-192.168.8.1}"
-PIHOLE_IP="${PIHOLE_IP:-192.168.8.145}"
-CLASH_IP="${CLASH_IP:-192.168.8.146}"
-PIHOLE_RANGE="${PIHOLE_RANGE:-192.168.8.144/28}"
-CLASH_RANGE="${CLASH_RANGE:-192.168.8.160/28}"
+PIHOLE_IP="${PIHOLE_IP:-192.168.8.202}"
+CLASH_IP="${CLASH_IP:-192.168.8.206}"
+PIHOLE_RANGE="${PIHOLE_RANGE:-192.168.8.201/30}"
+CLASH_RANGE="${CLASH_RANGE:-192.168.8.205/30}"
+APPS_RANGE="${APPS_RANGE:-192.168.8.209/30}"
 
 log()  { echo "  ✔ $*"; }
 warn() { echo "  ⚠ $*"; }
@@ -63,7 +64,6 @@ apt_install iproute2
 apt_install iptables
 apt_install curl
 apt_install ca-certificates
-apt_install isc-dhcp-client
 
 if ! command -v docker &>/dev/null; then
   warn "Docker not found — installing via get.docker.com..."
@@ -85,7 +85,7 @@ fi
 # 1. Create macvlan sub-interfaces on the physical NIC
 # =============================================================================
 
-for iface in macvlan-pihole macvlan-clash; do
+for iface in macvlan-pihole macvlan-clash macvlan-apps; do
   if ip link show "$iface" &>/dev/null; then
     warn "$iface already exists, skipping"
   else
@@ -104,7 +104,7 @@ done
 # Routes so the host can reach Pi-hole/Clash through the macvlan interfaces
 ip route add "${PIHOLE_IP}/32" dev macvlan-pihole metric 50 2>/dev/null \
   || warn "${PIHOLE_IP}/32 route already exists"
-ip route add "${CLASH_IP}/32"  dev macvlan-clash  metric 50 2>/dev/null \
+ip route add "${CLASH_IP}/32" dev macvlan-clash metric 50 2>/dev/null \
   || warn "${CLASH_IP}/32 route already exists"
 
 log "Host-side routes configured"
@@ -155,6 +155,23 @@ Destination=${CLASH_IP}/32
 Metric=50
 EOF
 
+cat > /etc/systemd/network/10-macvlan-apps.netdev <<EOF
+[NetDev]
+Name=macvlan-apps
+Kind=macvlan
+
+[MACVLAN]
+Mode=bridge
+EOF
+
+cat > /etc/systemd/network/10-macvlan-apps.network <<EOF
+[Match]
+Name=macvlan-apps
+
+[Network]
+# No address assigned — containers on apps_net get IPs from APPS_RANGE
+EOF
+
 cat > /etc/systemd/network/10-macvlan-parent.network <<EOF
 [Match]
 Name=${HOST_IFACE}
@@ -162,6 +179,7 @@ Name=${HOST_IFACE}
 [Network]
 MACVLAN=macvlan-pihole
 MACVLAN=macvlan-clash
+MACVLAN=macvlan-apps
 EOF
 
 systemctl enable --now systemd-networkd 2>/dev/null || true
@@ -196,6 +214,18 @@ else
     --opt parent=macvlan-clash \
     clash_net
   log "Created Docker network: clash_net (parent: macvlan-clash, range: $CLASH_RANGE)"
+fi
+
+if docker network ls --format '{{.Name}}' | grep -q "^apps_net$"; then
+  warn "apps_net already exists"
+else
+  docker network create \
+    --driver macvlan \
+    --subnet "$LAN_SUBNET" \
+    --ip-range "$APPS_RANGE" \
+    --opt parent=macvlan-apps \
+    apps_net
+  log "Created Docker network: apps_net (parent: macvlan-apps, range: $APPS_RANGE)"
 fi
 
 # =============================================================================
@@ -325,7 +355,8 @@ echo ""
 echo "  Interface layout:"
 echo "    ${HOST_IFACE} (physical, host IP: $(ip -4 addr show "${HOST_IFACE}" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1))"
 echo "    ├── macvlan-pihole → pihole_net → ${PIHOLE_IP} (Pi-hole)"
-echo "    └── macvlan-clash  → clash_net  → ${CLASH_IP}  (Clash)"
+echo "    ├── macvlan-clash  → clash_net  → ${CLASH_IP}  (Clash)"
+echo "    └── macvlan-apps   → apps_net   → ${APPS_RANGE} (Apps)"
 echo ""
 echo "     Pi-hole : https://${PIHOLE_IP}"
 echo "     Clash   : http://${CLASH_IP}:9090"

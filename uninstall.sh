@@ -17,9 +17,10 @@ elif [[ -f "/opt/clash-stack/.env" ]]; then
   set +o allexport
 fi
 
-PIHOLE_IP="${PIHOLE_IP:-192.168.8.145}"
-CLASH_IP="${CLASH_IP:-192.168.8.146}"
+PIHOLE_IP="${PIHOLE_IP:-192.168.8.202}"
+CLASH_IP="${CLASH_IP:-192.168.8.206}"
 STACK_DIR="${STACK_DIR:-/opt/clash-stack}"
+HOST_IFACE="${HOST_IFACE:-enp2s0}"
 
 log()  { echo "  ✔ $*"; }
 warn() { echo "  ⚠ $*"; }
@@ -49,7 +50,7 @@ done
 # 2. Remove Docker networks
 # =============================================================================
 
-for net in pihole_net clash_net; do
+for net in pihole_net clash_net apps_net; do
   if docker network ls --format '{{.Name}}' | grep -q "^${net}$"; then
     docker network rm "$net" && log "Removed network: $net" || warn "Could not remove: $net"
   else
@@ -66,6 +67,7 @@ for image in clash-mihomo:latest pihole-custom:latest pihole-clash-sync:latest; 
     docker rmi "$image" && log "Removed image: $image" || warn "Could not remove image: $image"
   fi
 done
+
 # =============================================================================
 # 4. Remove host routes
 # =============================================================================
@@ -78,12 +80,11 @@ ip route del "${CLASH_IP}/32" 2>/dev/null \
   && log "Removed route: ${CLASH_IP}/32" \
   || warn "Route not found: ${CLASH_IP}/32"
 
-
 # =============================================================================
 # 5. Remove macvlan interfaces
 # =============================================================================
 
-for iface in macvlan-pihole macvlan-clash; do
+for iface in macvlan-pihole macvlan-clash macvlan-apps; do
   if ip link show "$iface" &>/dev/null; then
     ip link del "$iface" && log "Removed interface: $iface" || warn "Could not remove: $iface"
   fi
@@ -98,6 +99,8 @@ for f in \
   /etc/systemd/network/10-macvlan-pihole.network \
   /etc/systemd/network/10-macvlan-clash.netdev \
   /etc/systemd/network/10-macvlan-clash.network \
+  /etc/systemd/network/10-macvlan-apps.netdev \
+  /etc/systemd/network/10-macvlan-apps.network \
   /etc/systemd/network/10-macvlan-parent.network; do
   [[ -f "$f" ]] && rm -f "$f" && log "Removed: $f" || warn "Not found: $f"
 done
@@ -116,36 +119,33 @@ log "IP forwarding disabled"
 # =============================================================================
 # 8. Remove fq_codel fair queuing
 # =============================================================================
- 
+
 systemctl disable --now fq-codel.service 2>/dev/null && log "Disabled fq-codel.service" || warn "fq-codel.service not found"
 rm -f /etc/systemd/system/fq-codel.service
 systemctl daemon-reload
- 
-# Remove the qdisc from the interface
+
 tc qdisc del dev "$HOST_IFACE" root 2>/dev/null && log "Removed fq_codel from $HOST_IFACE" || warn "No qdisc found on $HOST_IFACE"
+
 # =============================================================================
 # 9. Restore original file descriptor limits
 # =============================================================================
- 
+
 SOFT_BAK="$STACK_DIR/.ulimit-soft.bak"
 HARD_BAK="$STACK_DIR/.ulimit-hard.bak"
- 
+
 if [[ -f "$SOFT_BAK" && -f "$HARD_BAK" ]]; then
   ORIG_SOFT=$(cat "$SOFT_BAK")
   ORIG_HARD=$(cat "$HARD_BAK")
- 
-  # Restore limits.conf
+
   sed -i '/nofile/d' /etc/security/limits.conf
   echo "* soft nofile $ORIG_SOFT" >> /etc/security/limits.conf
   echo "* hard nofile $ORIG_HARD" >> /etc/security/limits.conf
   log "Restored ulimits to original (soft=$ORIG_SOFT hard=$ORIG_HARD)"
- 
-  # Restore systemd
+
   sed -i '/DefaultLimitNOFILE/d' /etc/systemd/system.conf
   systemctl daemon-reexec
   log "Restored systemd file descriptor limit"
 else
-  # No backup found — just remove our entries
   sed -i '/nofile/d' /etc/security/limits.conf
   sed -i '/DefaultLimitNOFILE/d' /etc/systemd/system.conf
   systemctl daemon-reexec

@@ -27,13 +27,8 @@ PIHOLE_IP="${PIHOLE_IP:-192.168.8.202}"
 CLASH_IP="${CLASH_IP:-192.168.8.206}"
 PIHOLE_RANGE="${PIHOLE_RANGE:-192.168.8.201/30}"
 CLASH_RANGE="${CLASH_RANGE:-192.168.8.205/30}"
-APPS_RANGE="${APPS_RANGE:-192.168.8.209/29}"
-# Host-side shim IPs — one unused IP per range so the host can reach containers
-# These must be in the same range but NOT assigned to any container
-PIHOLE_HOST_IP="${PIHOLE_HOST_IP:-192.168.8.203}"
-CLASH_HOST_IP="${CLASH_HOST_IP:-192.168.8.207}"
-APPS_HOST_IP="${APPS_HOST_IP:-192.168.8.215}"
-
+APPS_RANGE="${APPS_RANGE:-192.168.8.208/29}"
+# Host shim IPs — unused IPs in each range so the host can reach containers
 log()  { echo "  ✔ $*"; }
 warn() { echo "  ⚠ $*"; }
 
@@ -100,22 +95,13 @@ for iface in macvlan-pihole macvlan-clash macvlan-apps; do
   fi
 done
 
-# Assign host-side shim IPs so the host can reach containers through macvlan.
-# Without these the host is isolated from its own macvlan children.
-# We use one unused IP per range — not assigned to any container.
-ip addr add "${PIHOLE_HOST_IP}/32" dev macvlan-pihole 2>/dev/null \
-  || warn "${PIHOLE_HOST_IP} already assigned to macvlan-pihole"
-ip addr add "${CLASH_HOST_IP}/32" dev macvlan-clash 2>/dev/null \
-  || warn "${CLASH_HOST_IP} already assigned to macvlan-clash"
-ip addr add "${APPS_HOST_IP}/32" dev macvlan-apps 2>/dev/null \
-  || warn "${APPS_HOST_IP} already assigned to macvlan-apps"
-
-# Routes so the host can reach all container ranges through the shim IPs
-ip route add "${PIHOLE_RANGE}" dev macvlan-pihole metric 50 2>/dev/null \
-  || warn "${PIHOLE_RANGE} route already exists"
-ip route add "${CLASH_RANGE}" dev macvlan-clash metric 50 2>/dev/null \
-  || warn "${CLASH_RANGE} route already exists"
-ip route add "${APPS_RANGE}" dev macvlan-apps metric 50 2>/dev/null \
+# Routes — /32 for pihole/clash to override enp2s0 connected route
+# apps uses subnet route since macvlan-apps is a dedicated interface
+ip route add "${PIHOLE_IP}/32" dev macvlan-pihole metric 10 2>/dev/null \
+  || warn "${PIHOLE_IP}/32 route already exists"
+ip route add "${CLASH_IP}/32" dev macvlan-clash metric 10 2>/dev/null \
+  || warn "${CLASH_IP}/32 route already exists"
+ip route add "${APPS_RANGE}" dev macvlan-apps metric 10 2>/dev/null \
   || warn "${APPS_RANGE} route already exists"
 
 log "Host-side shim IPs and routes configured"
@@ -138,12 +124,11 @@ cat > /etc/systemd/network/10-macvlan-pihole.network <<EOF
 Name=macvlan-pihole
 
 [Network]
-# Shim IP — lets the host reach Pi-hole through macvlan isolation
-Address=${PIHOLE_HOST_IP}/32
+# No address assigned — /32 host route handles host-to-container reachability
 
 [Route]
-Destination=${PIHOLE_RANGE}
-Metric=50
+Destination=${PIHOLE_IP}/32
+Metric=10
 EOF
 
 cat > /etc/systemd/network/10-macvlan-clash.netdev <<EOF
@@ -160,12 +145,11 @@ cat > /etc/systemd/network/10-macvlan-clash.network <<EOF
 Name=macvlan-clash
 
 [Network]
-# Shim IP — lets the host reach Clash through macvlan isolation
-Address=${CLASH_HOST_IP}/32
+# No address assigned — /32 host route handles host-to-container reachability
 
 [Route]
-Destination=${CLASH_RANGE}
-Metric=50
+Destination=${CLASH_IP}/32
+Metric=10
 EOF
 
 cat > /etc/systemd/network/10-macvlan-apps.netdev <<EOF
@@ -182,12 +166,11 @@ cat > /etc/systemd/network/10-macvlan-apps.network <<EOF
 Name=macvlan-apps
 
 [Network]
-# Shim IP — lets the host reach app containers through macvlan isolation
-Address=${APPS_HOST_IP}/32
+# No address assigned — subnet route handles host access to app containers
 
 [Route]
 Destination=${APPS_RANGE}
-Metric=50
+Metric=10
 EOF
 
 cat > /etc/systemd/network/10-macvlan-parent.network <<EOF
@@ -372,9 +355,9 @@ docker compose -f "$STACK_DIR/docker-compose.sync.yml" up -d
 echo ""
 echo "  Interface layout:"
 echo "    ${HOST_IFACE} (physical, host IP: $(ip -4 addr show "${HOST_IFACE}" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1))"
-echo "    ├── macvlan-pihole → pihole_net → ${PIHOLE_IP} (Pi-hole)  [host shim: ${PIHOLE_HOST_IP}]"
-echo "    ├── macvlan-clash  → clash_net  → ${CLASH_IP}  (Clash)    [host shim: ${CLASH_HOST_IP}]"
-echo "    └── macvlan-apps   → apps_net   → ${APPS_RANGE} (Apps)    [host shim: ${APPS_HOST_IP}]"
+echo "    ├── macvlan-pihole → pihole_net → ${PIHOLE_IP} (Pi-hole)  "
+echo "    ├── macvlan-clash  → clash_net  → ${CLASH_IP}  (Clash)    "
+echo "    └── macvlan-apps   → apps_net   → ${APPS_RANGE} (Apps)    [subnet route: ${APPS_RANGE}]"
 echo ""
 echo "     Pi-hole : https://${PIHOLE_IP}"
 echo "     Clash   : http://${CLASH_IP}:9090"

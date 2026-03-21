@@ -19,11 +19,14 @@ fi
 
 PIHOLE_IP="${PIHOLE_IP:-192.168.8.202}"
 CLASH_IP="${CLASH_IP:-192.168.8.206}"
-STACK_DIR="${STACK_DIR:-/opt/clash-stack}"
-HOST_IFACE="${HOST_IFACE:-enp2s0}"
 PIHOLE_RANGE="${PIHOLE_RANGE:-192.168.8.201/30}"
 CLASH_RANGE="${CLASH_RANGE:-192.168.8.205/30}"
 APPS_RANGE="${APPS_RANGE:-192.168.8.209/29}"
+PIHOLE_HOST_IP="${PIHOLE_HOST_IP:-192.168.8.203}"
+CLASH_HOST_IP="${CLASH_HOST_IP:-192.168.8.207}"
+APPS_HOST_IP="${APPS_HOST_IP:-192.168.8.215}"
+STACK_DIR="${STACK_DIR:-/opt/clash-stack}"
+HOST_IFACE="${HOST_IFACE:-enp2s0}"
 
 log()  { echo "  ✔ $*"; }
 warn() { echo "  ⚠ $*"; }
@@ -72,8 +75,20 @@ for image in clash-mihomo:latest pihole-custom:latest pihole-clash-sync:latest; 
 done
 
 # =============================================================================
-# 4. Remove host routes
+# 4. Remove host shim IPs and routes
 # =============================================================================
+
+ip addr del "${PIHOLE_HOST_IP}/32" dev macvlan-pihole 2>/dev/null \
+  && log "Removed shim IP: ${PIHOLE_HOST_IP}" \
+  || warn "Shim IP not found: ${PIHOLE_HOST_IP}"
+
+ip addr del "${CLASH_HOST_IP}/32" dev macvlan-clash 2>/dev/null \
+  && log "Removed shim IP: ${CLASH_HOST_IP}" \
+  || warn "Shim IP not found: ${CLASH_HOST_IP}"
+
+ip addr del "${APPS_HOST_IP}/32" dev macvlan-apps 2>/dev/null \
+  && log "Removed shim IP: ${APPS_HOST_IP}" \
+  || warn "Shim IP not found: ${APPS_HOST_IP}"
 
 ip route del "${PIHOLE_RANGE}" 2>/dev/null \
   && log "Removed route: ${PIHOLE_RANGE}" \

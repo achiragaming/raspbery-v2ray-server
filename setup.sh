@@ -28,6 +28,11 @@ CLASH_IP="${CLASH_IP:-192.168.8.206}"
 PIHOLE_RANGE="${PIHOLE_RANGE:-192.168.8.201/30}"
 CLASH_RANGE="${CLASH_RANGE:-192.168.8.205/30}"
 APPS_RANGE="${APPS_RANGE:-192.168.8.209/29}"
+# Host-side shim IPs — one unused IP per range so the host can reach containers
+# These must be in the same range but NOT assigned to any container
+PIHOLE_HOST_IP="${PIHOLE_HOST_IP:-192.168.8.203}"
+CLASH_HOST_IP="${CLASH_HOST_IP:-192.168.8.207}"
+APPS_HOST_IP="${APPS_HOST_IP:-192.168.8.215}"
 
 log()  { echo "  ✔ $*"; }
 warn() { echo "  ⚠ $*"; }
@@ -95,13 +100,17 @@ for iface in macvlan-pihole macvlan-clash macvlan-apps; do
   fi
 done
 
-# NOTE: We do NOT assign the container IPs to the host-side macvlan interfaces.
-# Doing so causes the host to answer ARP for those IPs, stealing them from
-# the containers and making them unreachable from the LAN.
-# Macvlan host<->container isolation is a known limitation — access Pi-hole
-# and Clash dashboards from another LAN device (phone, other PC).
+# Assign host-side shim IPs so the host can reach containers through macvlan.
+# Without these the host is isolated from its own macvlan children.
+# We use one unused IP per range — not assigned to any container.
+ip addr add "${PIHOLE_HOST_IP}/32" dev macvlan-pihole 2>/dev/null \
+  || warn "${PIHOLE_HOST_IP} already assigned to macvlan-pihole"
+ip addr add "${CLASH_HOST_IP}/32" dev macvlan-clash 2>/dev/null \
+  || warn "${CLASH_HOST_IP} already assigned to macvlan-clash"
+ip addr add "${APPS_HOST_IP}/32" dev macvlan-apps 2>/dev/null \
+  || warn "${APPS_HOST_IP} already assigned to macvlan-apps"
 
-# Routes so the host can reach Pi-hole/Clash through the macvlan interfaces
+# Routes so the host can reach all container ranges through the shim IPs
 ip route add "${PIHOLE_RANGE}" dev macvlan-pihole metric 50 2>/dev/null \
   || warn "${PIHOLE_RANGE} route already exists"
 ip route add "${CLASH_RANGE}" dev macvlan-clash metric 50 2>/dev/null \
@@ -109,7 +118,7 @@ ip route add "${CLASH_RANGE}" dev macvlan-clash metric 50 2>/dev/null \
 ip route add "${APPS_RANGE}" dev macvlan-apps metric 50 2>/dev/null \
   || warn "${APPS_RANGE} route already exists"
 
-log "Host-side routes configured"
+log "Host-side shim IPs and routes configured"
 
 # =============================================================================
 # 2. Persist macvlan interfaces across reboots via systemd-networkd
@@ -129,7 +138,8 @@ cat > /etc/systemd/network/10-macvlan-pihole.network <<EOF
 Name=macvlan-pihole
 
 [Network]
-# No address assigned — assigning the container IP here steals it from the container
+# Shim IP — lets the host reach Pi-hole through macvlan isolation
+Address=${PIHOLE_HOST_IP}/32
 
 [Route]
 Destination=${PIHOLE_RANGE}
@@ -150,7 +160,8 @@ cat > /etc/systemd/network/10-macvlan-clash.network <<EOF
 Name=macvlan-clash
 
 [Network]
-# No address assigned — assigning the container IP here steals it from the container
+# Shim IP — lets the host reach Clash through macvlan isolation
+Address=${CLASH_HOST_IP}/32
 
 [Route]
 Destination=${CLASH_RANGE}
@@ -171,7 +182,8 @@ cat > /etc/systemd/network/10-macvlan-apps.network <<EOF
 Name=macvlan-apps
 
 [Network]
-# No address assigned — containers on apps_net get IPs from APPS_RANGE
+# Shim IP — lets the host reach app containers through macvlan isolation
+Address=${APPS_HOST_IP}/32
 
 [Route]
 Destination=${APPS_RANGE}
@@ -360,9 +372,9 @@ docker compose -f "$STACK_DIR/docker-compose.sync.yml" up -d
 echo ""
 echo "  Interface layout:"
 echo "    ${HOST_IFACE} (physical, host IP: $(ip -4 addr show "${HOST_IFACE}" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1))"
-echo "    ├── macvlan-pihole → pihole_net → ${PIHOLE_IP} (Pi-hole)"
-echo "    ├── macvlan-clash  → clash_net  → ${CLASH_IP}  (Clash)"
-echo "    └── macvlan-apps   → apps_net   → ${APPS_RANGE} (Apps)"
+echo "    ├── macvlan-pihole → pihole_net → ${PIHOLE_IP} (Pi-hole)  [host shim: ${PIHOLE_HOST_IP}]"
+echo "    ├── macvlan-clash  → clash_net  → ${CLASH_IP}  (Clash)    [host shim: ${CLASH_HOST_IP}]"
+echo "    └── macvlan-apps   → apps_net   → ${APPS_RANGE} (Apps)    [host shim: ${APPS_HOST_IP}]"
 echo ""
 echo "     Pi-hole : https://${PIHOLE_IP}"
 echo "     Clash   : http://${CLASH_IP}:9090"

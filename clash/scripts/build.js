@@ -95,22 +95,22 @@ function main(config) {
   const LAN_DNS = process.env.LAN_DNS || "192.168.8.1";
   const PROXY_GROUP = "🚀 Proxy";
   const VPS_PROFILE_NAME = process.env.VPS_PROFILE_NAME || "My-VPS-SG"; // must match the name of your main VPN node in the profiles
-  const EXTRA_FAKE_IP_BYPASS = [
-    "*.lan",
-    "*.local",
-    "*.internal",
-    "*.home",
-    "pi.hole",
-    "host.docker.internal",
-    "192.168.*",
-    "10.*",
-    "172.16.*",
-    "127.0.0.1",
-    "time.windows.com",
-    "time.apple.com", 
-    "pool.ntp.org",
-    "*.pool.ntp.org",
-  ];
+  // const EXTRA_FAKE_IP_BYPASS = [
+  //   "*.lan",
+  //   "*.local",
+  //   "*.internal",
+  //   "*.home",
+  //   "pi.hole",
+  //   "host.docker.internal",
+  //   "192.168.*",
+  //   "10.*",
+  //   "172.16.*",
+  //   "127.0.0.1",
+  //   "time.windows.com",
+  //   "time.apple.com", 
+  //   "pool.ntp.org",
+  //   "*.pool.ntp.org",
+  // ];
   // ── END CONFIGURATION ──────────────────────────────────────────────────────
 
   const isIP = (s) => /^\d+\.\d+\.\d+\.\d+$/.test(s);
@@ -141,12 +141,9 @@ function main(config) {
   // DNS
   config.dns = {
     enable: true,
-    "enhanced-mode": "fake-ip",
+    "enhanced-mode": "redir-host",
     listen: `${CLASH_IP}:53`,
-    nameserver: [
-      "https://1.1.1.1/dns-query", // Cloudflare DoH
-      "https://8.8.8.8/dns-query", // Google DoH
-    ],
+    nameserver: [PIHOLE_IP],
     "proxy-server-nameserver": [LAN_DNS],
     "default-nameserver": [LAN_DNS],
     "nameserver-policy": {
@@ -156,22 +153,22 @@ function main(config) {
       "*.home": PIHOLE_IP,
       "pi.hole": PIHOLE_IP,
     },
-    "fake-ip-filter": [
-      ...new Set([
-        ...vpnServers,
-        ...EXTRA_FAKE_IP_BYPASS,
-        ...((config.dns || {})["fake-ip-filter"] || []),
-      ]),
-    ],
+    // "fake-ip-filter": [
+    //   ...new Set([
+    //     ...vpnServers,
+    //     ...EXTRA_FAKE_IP_BYPASS,
+    //     ...((config.dns || {})["fake-ip-filter"] || []),
+    //   ]),
+    // ],
     hosts: (config.dns || {}).hosts || {},
   };
 
   // TUN
   config.tun = {
     enable: true,
-    stack: "system",
+    stack: "gvisor",
     "auto-route": true,
-    "strict-route": false,
+    "strict-route": true,
     "auto-detect-interface": true,
     // Hijack any DNS hitting port 53 and hand it to Clash's own resolver (5353).
     // The iptables DNAT in entrypoint.sh then redirects non-Pi-hole DNS to

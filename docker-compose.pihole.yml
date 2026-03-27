@@ -31,29 +31,29 @@ services:
 
     environment:
       # Gateway — set by our entrypoint wrapper before s6-init
-      GATEWAY_IP: ${LAN_GATEWAY}
+      GATEWAY_IP: ${CLASH_IP}
 
       # Pi-hole v6 FTL config
       TZ: ${TZ}
       FTLCONF_webserver_api_password: ${PIHOLE_PASSWORD}
 
       # Upstream DNS → Clash:53 (Clash then forwards to Cloudflare DoH)
-      FTLCONF_dns_upstreams: ${CLASH_IP}
+      # FTLCONF_dns_upstreams: ${CLASH_IP}
 
-      FTLCONF_dns_dnssec:        "false"
-      FTLCONF_dns_bogusPriv:     "true"
-      FTLCONF_dns_fqdnRequired:  "true"
-      FTLCONF_dns_listeningMode: "all"
-      FTLCONF_dns_revServers:    "false"
-      FTLCONF_misc_etc_hosts:    "false"
+      # FTLCONF_dns_dnssec: "false"
+      # FTLCONF_dns_bogusPriv: "true"
+      # FTLCONF_dns_fqdnRequired: "true"
+      # FTLCONF_dns_listeningMode: "all"
+      # FTLCONF_dns_revServers: "false"
+      # FTLCONF_misc_etc_hosts: "false"
 
       # DHCP — router points clients to Clash (their gateway)
-      FTLCONF_dhcp_active:     "true"
-      FTLCONF_dhcp_start:      ${DHCP_START}
-      FTLCONF_dhcp_end:        ${DHCP_END}
-      FTLCONF_dhcp_router:     ${CLASH_IP}
-      FTLCONF_dhcp_leaseTime:  ${DHCP_LEASE_TIME:-24h}
-      FTLCONF_dhcp_domain:     ${DHCP_DOMAIN:-lan}
+      FTLCONF_dhcp_active: "true"
+      FTLCONF_dhcp_start: ${DHCP_START}
+      FTLCONF_dhcp_end: ${DHCP_END}
+      FTLCONF_dhcp_router: ${CLASH_IP}
+      FTLCONF_dhcp_leaseTime: ${DHCP_LEASE_TIME:-24h}
+      FTLCONF_dhcp_domain: ${DHCP_DOMAIN:-lan}
 
     volumes:
       - pihole_data:/etc/pihole
@@ -61,14 +61,15 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
     healthcheck:
-      test: ["CMD", "dig", "+short", "@127.0.0.1", "pi.hole", "+time=2", "+tries=1"]
+      test:
+        ["CMD", "dig", "+short", "@127.0.0.1", "pi.hole", "+time=2", "+tries=1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
 
     cap_add:
-      - NET_ADMIN        # iptables / network setup inside container
+      - NET_ADMIN # iptables / network setup inside container
       - NET_BIND_SERVICE
       - CHOWN
       - SETFCAP

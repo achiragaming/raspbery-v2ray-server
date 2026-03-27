@@ -174,7 +174,7 @@ function main(config) {
     // The iptables DNAT in entrypoint.sh then redirects non-Pi-hole DNS to
     // Pi-hole:53 before it even reaches here, so the chain is:
     //   LAN client → iptables DNAT → Pi-hole:53 → Clash:5353 → DoH
-    "dns-hijack": ["any:53"],
+    "dns-hijack": [],
     "route-exclude-address": [
       ...new Set([
         LAN_CIDR,

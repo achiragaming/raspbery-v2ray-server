@@ -3,15 +3,9 @@
 # clash/scripts/entrypoint.sh
 # 1. Fix default gateway  — macvlan gives no gateway, we set it ourselves
 # 2. DNS hijack           — force ALL client DNS (port 53) to Pi-hole
-# 3. Transparent proxy    — TPROXY redirect LAN TCP/UDP into Clash
-# 4. Build config.yaml   — node build.js merges profiles → mihomo config
+# 3. SNAT (Masquerade)    — Fix asymmetric routing for DNS
+# 4. Build config.yaml    — node build.js merges profiles → mihomo config
 # 5. Start mihomo
-#
-# Environment variables (all come from .env via docker-compose):
-#   GATEWAY_IP   — LAN router IP   (e.g. 192.168.8.1)
-#   PIHOLE_IP    — Pi-hole IP      (e.g. 192.168.8.145)
-#   CLASH_IP     — this container  (e.g. 192.168.8.146)
-#   LAN_SUBNET   — LAN CIDR        (e.g. 192.168.8.0/24)
 # =============================================================================
 set -e
 
@@ -26,14 +20,10 @@ else
 fi
 
 # ── 2. DNS hijack → Pi-hole ───────────────────────────────────────────────────
-# Any DNS query arriving at Clash from a LAN client that is NOT already
-# addressed to Pi-hole gets DNAT'd to Pi-hole:53.
-# Pi-hole then forwards upstream to Clash's DNS listener (port 5353 or 53
-# as configured in build.js), completing the chain:
-#   LAN client → Clash (hijack) → Pi-hole (filter) → Clash DNS → DoH
 if [ -n "${PIHOLE_IP:-}" ]; then
   echo "[entrypoint] Wiring DNS hijack → Pi-hole ($PIHOLE_IP)"
 
+  # -- STEP A: DNAT (Intercept queries from LAN) --
   # UDP DNS
   iptables -t nat -A PREROUTING \
     -p udp --dport 53 \
@@ -48,13 +38,26 @@ if [ -n "${PIHOLE_IP:-}" ]; then
     ! -s "$PIHOLE_IP" \
     -j DNAT --to-destination "${PIHOLE_IP}:53"
 
-  echo "[entrypoint] DNS hijack rules added"
+  # -- STEP B: SNAT / MASQUERADE (Fix Asymmetric Routing) --
+  # This forces Pi-hole to reply to THIS container instead of the client.
+  # Otherwise, the client drops the packet because the source IP doesn't match.
+  iptables -t nat -A POSTROUTING \
+    -p udp -d "$PIHOLE_IP" --dport 53 \
+    -j MASQUERADE
+
+  iptables -t nat -A POSTROUTING \
+    -p tcp -d "$PIHOLE_IP" --dport 53 \
+    -j MASQUERADE
+
+  echo "[entrypoint] DNS hijack & MASQUERADE rules added"
 fi
 
 # ── 3. Build Clash config from profiles ──────────────────────────────────────
 echo "[entrypoint] Building config..."
 node /scripts/build.js
 
-# ── 5. Start mihomo ───────────────────────────────────────────────────────────
+# ── 4. Start mihomo ───────────────────────────────────────────────────────────
 echo "[entrypoint] Starting mihomo..."
+# Ensure the config directory exists
+mkdir -p /root/.config/mihomo
 exec /usr/local/bin/mihomo -d /root/.config/mihomo

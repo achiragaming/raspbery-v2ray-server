@@ -181,7 +181,7 @@ function main(config) {
         PIHOLE_IP + "/32",
         CLASH_IP + "/32",
         "127.0.0.1/32",
-        ...vpnServers.filter(isIP).map((s) => s + "/32"),
+        // ...vpnServers.filter(isIP).map((s) => s + "/32"),
       ]),
     ],
   };
@@ -225,11 +225,11 @@ if (config["proxy-groups"]) {
   }
 }
   // Rules
-  const vpnBypassRules = vpnServers.map((s) =>
-    isIP(s)
-      ? `IP-CIDR,${s}/32,DIRECT,no-resolve`
-      : `DOMAIN,${s},DIRECT,no-resolve`,
-  );
+  // const vpnBypassRules = vpnServers.map((s) =>
+  //   isIP(s)
+  //     ? `IP-CIDR,${s}/32,DIRECT,no-resolve`
+  //     : `DOMAIN,${s},DIRECT,no-resolve`,
+  // );
   const existingRules = (config.rules || []).filter(
     (r) => !r.startsWith("MATCH,"),
   );
@@ -238,7 +238,7 @@ if (config["proxy-groups"]) {
     `MATCH,${PROXY_GROUP}`;
 
   config.rules = [
-    ...vpnBypassRules,
+    // ...vpnBypassRules,
     `IP-CIDR,${LAN_CIDR},DIRECT,no-resolve`,
 
     ...existingRules,

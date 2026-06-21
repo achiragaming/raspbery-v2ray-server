@@ -34,14 +34,14 @@ services:
     environment:
       PIHOLE_IP: ${PIHOLE_IP}
       PIHOLE_PASSWORD: ${PIHOLE_PASSWORD}
-      CLASH_API: http://${CLASH_IP}:9090
+      CLASH_API: http://${CLASH_IP}:${CLASH_PORT}
       CLASH_SECRET: ${CLASH_SECRET}
-      SYNC_INTERVAL_MS: ${SYNC_INTERVAL_MS:-60000}
+      SYNC_INTERVAL_MS: ${SYNC_INTERVAL_MS}
       BUILD_JS: /scripts/build.js
       PROFILES_DIR: /profiles
       CONFIG_OUTPUT: /root/.config/mihomo/config.yaml
       DEBUG: ${DEBUG:-false}
-      PORT: ${SYNC_METRICS_PORT:-8787}
+      SYNC_METRICS_PORT: ${SYNC_METRICS_PORT}
 
     volumes:
       - clash_sync_state:/var/lib/clash-sync
@@ -51,10 +51,7 @@ services:
 
     healthcheck:
       test:
-        [
-          "CMD-SHELL",
-          "sh -c 'wget -qO- http://localhost:$PORT/health >/dev/null 2>&1 || exit 1'",
-        ]
+        ["CMD-SHELL", "wget --spider http://localhost:${SYNC_METRICS_PORT}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

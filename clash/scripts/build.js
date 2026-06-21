@@ -91,6 +91,7 @@ function main(config) {
   const PIHOLE_IP = process.env.PIHOLE_IP || "192.168.8.145";
   const LAN_CIDR = process.env.LAN_SUBNET || "192.168.8.0/24";
   const CLASH_IP = process.env.CLASH_IP || "192.168.8.146";
+  const CLASH_PORT = process.env.CLASH_PORT || "9090";
   const SECRET = process.env.CLASH_SECRET || "changeme";
   const LAN_DNS = process.env.LAN_DNS || "192.168.8.1";
   const PROXY_GROUP = "🚀 Proxy";
@@ -190,7 +191,7 @@ function main(config) {
   };
 
   // External controller
-  config["external-controller"] = `${CLASH_IP}:9090`;
+  config["external-controller"] = `${CLASH_IP}:${CLASH_PORT}`;
   config["secret"] = SECRET;
 
   // Auto-populate proxy groups with all nodes

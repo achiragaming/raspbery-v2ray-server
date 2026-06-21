@@ -29,7 +29,7 @@ const cfg = {
   SYNC_INTERVAL_MS: parseInt(process.env.SYNC_INTERVAL_MS || "60000", 10),
   POLICY_HASH_FILE: "/var/lib/clash-sync/policy.hash",
   DEBUG: process.env.DEBUG === "true",
-  PORT: process.env.PORT || 8787,
+  SYNC_METRICS_PORT: process.env.SYNC_METRICS_PORT || 8787,
 };
 
 // ---------------------------------------------------------------------------
@@ -224,8 +224,8 @@ function startApiServer() {
     res.end("Not Found");
   });
 
-  server.listen(cfg.PORT, () => {
-    log(`REST API running on http://0.0.0.0:${cfg.PORT}`);
+  server.listen(cfg.SYNC_METRICS_PORT, () => {
+    log(`REST API running on http://0.0.0.0:${cfg.SYNC_METRICS_PORT}`);
   });
 }
 

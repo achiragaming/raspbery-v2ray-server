@@ -203,7 +203,7 @@ const allProxyNames = (config.proxies || [])
     name: "⚖️ Balance",
     type: "load-balance",
     strategy: "round-robin",
-    proxies: [...allProxyNames, "DIRECT"],
+    proxies: [...allProxyNames],
     url: "http://www.gstatic.com/generate_204",
     interval: 180,
     timeout: 2000,

@@ -199,16 +199,7 @@ const allProxyNames = (config.proxies || [])
   .map(p => p.name)
   .filter(name => name !== VPS_PROFILE_NAME);
   // Add a load-balance group for non-preferred nodes
-  const lbGroup = {
-    name: "⚖️ Balance",
-    type: "load-balance",
-    strategy: "round-robin",
-    proxies: [...allProxyNames],
-    url: "http://www.gstatic.com/generate_204",
-    interval: 180,
-    timeout: 2000,
-    lazy: false,
-  };
+
 
   config["proxy-groups"].forEach((group) => {
     if (group.name.includes("Proxy") || group.name.includes("🚀")) {
@@ -219,14 +210,10 @@ const allProxyNames = (config.proxies || [])
       group.timeout = 2000;
       group.lazy = false;
       // Preferred VPS first, then load-balance group, then DIRECT
-      group.proxies = [VPS_PROFILE_NAME, "⚖️ Balance", "DIRECT"];
+      group.proxies = [VPS_PROFILE_NAME, ...allProxyNames, "DIRECT"];
     }
   });
 
-  // Inject the balance group if not already present
-  if (!config["proxy-groups"].find(g => g.name === "⚖️ Balance")) {
-    config["proxy-groups"].push(lbGroup);
-  }
 }
   // Rules
   const vpnBypassRules = vpnServers.map((s) =>

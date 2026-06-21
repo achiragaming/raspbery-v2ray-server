@@ -192,7 +192,9 @@ function main(config) {
 
   // Auto-populate proxy groups with all nodes
 if (config["proxy-groups"]) {
-  const allProxyNames = (config.proxies || []).map(p => p.name);
+  const allProxyNames = (config.proxies || [])
+  .map(p => p.name)
+  .filter(name => name !== VPS_PROFILE_NAME);
 
   // Add a load-balance group for non-preferred nodes
   const lbGroup = {
